@@ -66,10 +66,10 @@ def preprocess_comments(PATH_RAW, PATH_DATA):
 
 
 def parse_raw_data(PATH_RAW, PATH_DATA):
-    # check the existence of the raw data
+    # check the existence of the data raw
     assert(os.path.isdir(PATH_RAW))
 
-    # create the corresponding directory for preprocessed data
+    # create the corresponding directory for preprocessed raw
     if not os.path.isdir(PATH_DATA):
         os.makedirs(PATH_DATA)
 
@@ -146,7 +146,7 @@ def split_train_test(PATH_DATA):
             data = json.loads(line)
             instances.append(data)
 
-    # 50% former instances are training data
+    # 50% former instances are training raw
     num_train = len(instances) // 2
 
     # create an ID set for training posts
@@ -189,10 +189,10 @@ if __name__ == '__main__':
 
     # load
     dataset = sys.argv[1]
-    PATH_RAW = '../../raw/%s/' % dataset
-    PATH_DATA = '../../data/%s/' % dataset
+    PATH_RAW = '../../data/%s/' % dataset
+    PATH_DATA = '../../raw/%s/' % dataset
 
-    print('Parsing the raw dataset...', file=sys.stderr)
+    print('Parsing the data dataset...', file=sys.stderr)
     parse_raw_data(PATH_RAW, PATH_DATA)
 
     print('Linking questions and corresponding answers...', file=sys.stderr)
