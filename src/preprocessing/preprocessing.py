@@ -1,10 +1,13 @@
 #!/home/zeyu/anaconda3/bin/python3.6
 
-import sys
-import os
+import sys, os
+import re
 from html.parser import HTMLParser
 from lxml import etree
 from bs4 import BeautifulSoup
+
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 
 try:
     import ujson as json
@@ -13,6 +16,43 @@ except:
 
 def clean_html(x):
     return BeautifulSoup(x, 'lxml').get_text()
+
+
+def clean_str(string):
+                  """
+                  Cleaning strings of content or title
+                  Original taken from
+                  https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
+                  :param string: The string to be handled.
+                  :return:
+                  """
+                  string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+                  string = re.sub(r"\'s", " \'s", string)
+                  string = re.sub(r"\'ve", " \'ve", string)
+                  string = re.sub(r"n\'t", " n\'t", string)
+                  string = re.sub(r"\'re", " \'re", string)
+                  string = re.sub(r"\'d", " \'d", string)
+                  string = re.sub(r"\'ll", " \'ll", string)
+                  string = re.sub(r",", " , ", string)
+                  string = re.sub(r"!", " ! ", string)
+                  string = re.sub(r"\(", " \( ", string)
+                  string = re.sub(r"\)", " \) ", string)
+                  string = re.sub(r"\?", " \? ", string)
+                  string = re.sub(r"\s{2,}", " ", string)
+                  return string.strip().lower()
+
+
+def remove_stopwords(string, stopword_set):
+    """
+    
+    :param string:
+    :param stopword_set:
+    :return:
+    """
+    word_tokens = word_tokenize(string)
+    filtered_string = [word for word in word_tokens \
+                            if word not in stopword_set]
+    return " ".join(filtered_string)
 
 
 def split_post(raw_dir, data_dir):
@@ -71,9 +111,8 @@ def process_QA(data_dir):
         for line in fin_q:
             data = json.loads(line)
             try:
-                qid, owner_id = data['Id'], data['OwnerUserId']
-
-                acc_id = data.get('AcceptedAnswerId', None)
+                qid, owner_id = data.get('Id'), data.get('OwnerUserId')
+                acc_id = data.get('AcceptedAnswerId')
 
                 qa_map[qid] = {
                     'QuestionId': qid,
@@ -158,10 +197,6 @@ def extract_question_answer(data_dir, parsed_dir):
     QA pair file Format: <qid> <aid>
     AU pair file Format: <aid> <owner_id>
 
-    E.g.
-    101 40
-    145 351
-
     :param data_dir: data directory
     :param parsed_dir: parsed file directory
     :return:
@@ -173,21 +208,61 @@ def extract_question_answer(data_dir, parsed_dir):
     if not os.path.exists(data_dir + INPUT):
         IOError("Can NOT find {}".format(data_dir + INPUT))
 
-    with open(data_dir + INPUT, "r") as fin:
-        with open(parsed_dir + OUTPUT_QA, "w") as fout_qa:
-            with open(parsed_dir + OUTPUT_AU, "w") as fout_au:
-                for line in fin:
-                    data = json.loads(line)
-                    qid = data['QuestionId']
-                    au_list = data['AnswerOwnerList']
-                    for aid, owner_id in au_list:
-                        print("{} {}".format(str(qid), str(aid)),
-                              file=fout_qa)
-                        print("{} {}".format(str(aid), str(owner_id)),
-                              file=fout_au)
+    with open(data_dir + INPUT, "r") as fin, \
+         open(parsed_dir + OUTPUT_QA, "w") as fout_qa, \
+         open(parsed_dir + OUTPUT_AU, "w") as fout_au:
+        for line in fin:
+            data = json.loads(line)
+            qid = data['QuestionId']
+            au_list = data['AnswerOwnerList']
+            for aid, owner_id in au_list:
+                print("{} {}".format(str(qid), str(aid)),
+                      file=fout_qa)
+                print("{} {}".format(str(aid), str(owner_id)),
+                      file=fout_au)
+
 
 def extract_question_content(data_dir, parsed_dir):
-    # TODO: start from here
+    INPUT = "Posts_Q.json"
+    OUTPUT_T = "q_title.txt"
+    OUTPUT_T_SW = "q_title_sw.txt"
+    OUTPUT_C = "q_ct.txt"
+    OUTPUT_C_SW = "q_ct_sw.txt"
+    if not os.path.exists(data_dir + INPUT):
+        IOError("Can NOT locate {}".format(data_dir + INPUT))
+
+    """
+    We will try both with or without stopwords to 
+    check out the performance.
+    """
+    with open(data_dir + INPUT, "r") as fin, \
+         open(parsed_dir + OUTPUT_T) as fout_t, \
+         open(parsed_dir + OUTPUT_T_SW) as fout_tsw, \
+         open(parsed_dir + OUTPUT_C) as fout_c, \
+         open(parsed_dir + OUTPUT_C_SW) as fout_csw:
+        for line in fin:
+            data = json.loads(line)
+            try:
+                qid = data.get('Id')
+                title = data.get('Title')
+                content = data.get('Body')
+            except:
+                # TODO: Handling the exception data
+                # But honestly, if using `dict.get`, there won't be exceptions.
+                print(data)
+                continue
+
+            content, title = clean_str(content), clean_str(title)
+            sw_set = set(stopwords.words('english'))
+            content_nsw = remove_stopwords(content, sw_set)
+            title_nsw = remove_stopwords()
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":
