@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-echo "Preprocessing raw ..."
-python3 ./src/preprocessing/preprocessing.py raspberrypi
+echo "Preprocessing raw data"
+python3 ./src/preprocessing/preprocessing.py 3dprinting

@@ -2,6 +2,7 @@
 
 import sys, os
 import re
+import logging
 from html.parser import HTMLParser
 from lxml import etree
 from bs4 import BeautifulSoup
@@ -19,27 +20,27 @@ def clean_html(x):
 
 
 def clean_str(string):
-                  """
-                  Cleaning strings of content or title
-                  Original taken from
-                  https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
-                  :param string: The string to be handled.
-                  :return:
-                  """
-                  string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
-                  string = re.sub(r"\'s", " \'s", string)
-                  string = re.sub(r"\'ve", " \'ve", string)
-                  string = re.sub(r"n\'t", " n\'t", string)
-                  string = re.sub(r"\'re", " \'re", string)
-                  string = re.sub(r"\'d", " \'d", string)
-                  string = re.sub(r"\'ll", " \'ll", string)
-                  string = re.sub(r",", " , ", string)
-                  string = re.sub(r"!", " ! ", string)
-                  string = re.sub(r"\(", " \( ", string)
-                  string = re.sub(r"\)", " \) ", string)
-                  string = re.sub(r"\?", " \? ", string)
-                  string = re.sub(r"\s{2,}", " ", string)
-                  return string.strip().lower()
+    """
+    Cleaning strings of content or title
+    Original taken from
+    https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
+    :param string: The string to be handled.
+    :return:
+    """
+    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+    string = re.sub(r"\'s", " \'s", string)
+    string = re.sub(r"\'ve", " \'ve", string)
+    string = re.sub(r"n\'t", " n\'t", string)
+    string = re.sub(r"\'re", " \'re", string)
+    string = re.sub(r"\'d", " \'d", string)
+    string = re.sub(r"\'ll", " \'ll", string)
+    string = re.sub(r",", " , ", string)
+    string = re.sub(r"!", " ! ", string)
+    string = re.sub(r"\(", " \( ", string)
+    string = re.sub(r"\)", " \) ", string)
+    string = re.sub(r"\?", " \? ", string)
+    string = re.sub(r"\s{2,}", " ", string)
+    return string.strip().lower()
 
 
 def remove_stopwords(string, stopword_set):
@@ -50,8 +51,8 @@ def remove_stopwords(string, stopword_set):
     :return:
     """
     word_tokens = word_tokenize(string)
-    filtered_string = [word for word in word_tokens \
-                            if word not in stopword_set]
+    filtered_string = [word for word in word_tokens
+                       if word not in stopword_set]
     return " ".join(filtered_string)
 
 
@@ -66,7 +67,7 @@ def split_post(raw_dir, data_dir):
     """
     print("Splitting Questions and Answers ...")
     with open(data_dir + "Posts_Q.json", "w") as fout_q, \
-        open(data_dir + "Posts_A.json", "w") as fout_a:
+            open(data_dir + "Posts_A.json", "w") as fout_a:
         parser = etree.iterparse(raw_dir + 'Posts.xml',
                                  events=('end',), tag='row')
         for event, elem in parser:
@@ -99,10 +100,10 @@ def process_QA(data_dir):
     OUTPUT = "QAU_Map.json"
 
     if not os.path.exists(data_dir + POST_Q):
-        raise IOError("file {} does NOT exist".format(data_dir + "Posts_Q.json"))
+        raise IOError("file {} does NOT exist".format(data_dir + POST_Q))
 
     if not os.path.exists(data_dir + POST_A):
-        raise IOError("file {} does NOT exist".format(data_dir + "Posts_A.json"))
+        raise IOError("file {} does NOT exist".format(data_dir + POST_A))
 
     qa_map = {}
 
@@ -122,7 +123,9 @@ def process_QA(data_dir):
                 }
             except:
                 # TODO: handle exceptional data
-                print(data)
+                logger = logging.getLogger(__name__)
+                logger.info("Error at PQA: " + str(data))
+                # print(data)
                 continue
 
     # Process answer information
@@ -131,19 +134,19 @@ def process_QA(data_dir):
             data = json.loads(line)
             try:
                 aid, owner_id = data['Id'], data['OwnerUserId']
-
                 par_id = data['ParentId']
 
                 entry = qa_map.get(par_id, None)
                 if entry:
                     entry['AnswerOwnerList'].append((aid, owner_id))
-
                 else:
                     print("Answer {} belongs to unknown Question {}"
                           .format(aid, par_id), file=sys.stderr)
             except:
                 # TODO: handle exceptional data
-                print(data)
+                logger = logging.getLogger(__name__)
+                logger.info("Error at PQA: " + str(data))
+                # print(data)
                 continue
 
     # Sort qid list, write to file by order of qid
@@ -182,10 +185,10 @@ def extract_question_user(data_dir, parsed_dir):
             for line in fin:
                 data = json.loads(line)
                 qid = data['QuestionId']
-                owner_id = data['QuesionOwnerId']
+                owner_id = data['QuestionOwnerId']
                 print("{} {}".format(str(qid), str(owner_id)),
                       file=fout)
-    print("Done! Question-User pairs are in {}}"
+    print("Done! Question-User pairs are in {}"
           .format(parsed_dir + OUTPUT))
 
 
@@ -209,66 +212,76 @@ def extract_question_answer(data_dir, parsed_dir):
         IOError("Can NOT find {}".format(data_dir + INPUT))
 
     with open(data_dir + INPUT, "r") as fin, \
-         open(parsed_dir + OUTPUT_QA, "w") as fout_qa, \
-         open(parsed_dir + OUTPUT_AU, "w") as fout_au:
+            open(parsed_dir + OUTPUT_QA, "w") as fout_qa, \
+            open(parsed_dir + OUTPUT_AU, "w") as fout_au:
         for line in fin:
             data = json.loads(line)
             qid = data['QuestionId']
             au_list = data['AnswerOwnerList']
             for aid, owner_id in au_list:
                 print("{} {}".format(str(qid), str(aid)),
-                      file=fout_qa)
+                        file=fout_qa)
                 print("{} {}".format(str(aid), str(owner_id)),
-                      file=fout_au)
+                        file=fout_au)
 
 
 def extract_question_content(data_dir, parsed_dir):
+    """
+    Extract Questions, Content pairs from Question file
+    Question Content pair format: <qid> <content>
+    We extract both with and without stop-word version
+    :param data_dir: data directory
+    :param parsed_dir: parsed file directory
+    :return:
+    """
     INPUT = "Posts_Q.json"
-    OUTPUT_T = "q_title.txt"
-    OUTPUT_T_SW = "q_title_sw.txt"
-    OUTPUT_C = "q_ct.txt"
-    OUTPUT_C_SW = "q_ct_sw.txt"
+    OUTPUT_T = "q_title.txt"  # Question title
+    OUTPUT_T_NSW = "q_title_nsw.txt"  # Question title, no stop word
+    OUTPUT_C = "q_content.txt"  # Question content
+    OUTPUT_C_NSW = "q_content_nsw.txt"  # Question content, no stop word
+
+    logger = logging.getLogger(__name__)
     if not os.path.exists(data_dir + INPUT):
         IOError("Can NOT locate {}".format(data_dir + INPUT))
+
+    sw_set = set(stopwords.words('english'))  # Create the stop word set
 
     """
     We will try both with or without stopwords to 
     check out the performance.
     """
     with open(data_dir + INPUT, "r") as fin, \
-         open(parsed_dir + OUTPUT_T) as fout_t, \
-         open(parsed_dir + OUTPUT_T_SW) as fout_tsw, \
-         open(parsed_dir + OUTPUT_C) as fout_c, \
-         open(parsed_dir + OUTPUT_C_SW) as fout_csw:
+            open(parsed_dir + OUTPUT_T, "w") as fout_t, \
+            open(parsed_dir + OUTPUT_T_NSW, "w") as fout_t_nsw, \
+            open(parsed_dir + OUTPUT_C, "w") as fout_c, \
+            open(parsed_dir + OUTPUT_C_NSW, "w") as fout_c_nsw:
         for line in fin:
             data = json.loads(line)
             try:
                 qid = data.get('Id')
                 title = data.get('Title')
                 content = data.get('Body')
+
+                content, title = clean_str(content), clean_str(title)
+                content_nsw = remove_stopwords(content, sw_set)
+                title_nsw = remove_stopwords(title, sw_set)
+
+                print("{} {}".format(qid, content_nsw), file=fout_c_nsw)  # Without stopword
+                print("{} {}".format(qid, content), file=fout_c)  # With stopword
+                print("{} {}".format(qid, title_nsw), file=fout_t_nsw)  # Without stopword
+                print("{} {}".format(qid, title), file=fout_t)  # With stopword
             except:
                 # TODO: Handling the exception data
                 # But honestly, if using `dict.get`, there won't be exceptions.
-                print(data)
+                logger.info("Error at EQC: " + str(data))
+                # print(data)
                 continue
-
-            content, title = clean_str(content), clean_str(title)
-            sw_set = set(stopwords.words('english'))
-            content_nsw = remove_stopwords(content, sw_set)
-            title_nsw = remove_stopwords()
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 + 1:
         print("\t Usage: {} [name of dataset]"
-            .format(sys.argv[0]), file=sys.stderr)
+              .format(sys.argv[0]), file=sys.stderr)
         sys.exit(0)
 
     DATASET = sys.argv[1]
@@ -277,11 +290,26 @@ if __name__ == "__main__":
     PARSED_DIR = "./data/parsed/{}/".format(DATASET)
     README_FILE = "./data/README.txt"
 
+    # logging.basicConfig(level=logging.DEBUG,
+    #                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+    #                     datefmt='%a, %d %b %Y %H:%M:%S',
+    #                     filename=DATA_DIR + "mylog.log",
+    #                     filemode='w')
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    log_fh = logging.FileHandler(DATA_DIR + "log.log")
+    log_fh.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    log_fh.setFormatter(formatter)
+    logger.addHandler(log_fh)
 
     if not os.path.exists(RAW_DIR):
         print("{} dir or path doesn't exist.\n"
               "Please download the raw data set into the /raw."
               .format(RAW_DIR), file=sys.stderr)
+        sys.exit()
 
     if not os.path.exists(DATA_DIR):
         print("{} data dir not found.\n"
@@ -297,20 +325,27 @@ if __name__ == "__main__":
 
 
     print("******************************************")
+
+    # Split contest to question and answer
     split_post(raw_dir=RAW_DIR, data_dir=DATA_DIR)
 
-    # extract question-user, answer-user, and question-answer information
+    # Extract question-user, answer-user, and question-answer information
+    # Generate Question and Answer/User map
     process_QA(data_dir=DATA_DIR)
 
     print("Extracting Uq - Q pairs ...")
-    extract_question_user(data_dir=DATA_DIR, pased_dir=PARSED_DIR)
+    extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    # print("Extracting Q - Ua pairs ...")
+    print("Extracting Q - A, A - U pairs ...")
+    extract_question_answer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    # print("Extracting Q - Qcontent pairs ...")
-
-    # print("Creating Uq Q Ua* Ua tuples...")
+    print("Extracting Q - Q Content, Title pairs ...")
+    extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     print("Done!")
 
+
+# TODO: Consider following cases. (1) A question has no accepted answer. (2) A question has qid, aid, xxx, as None.
+# TODO: Re-organize the folders and the data storage.
+# TODO: Consider whether an empty or null value will affect later functions.
 

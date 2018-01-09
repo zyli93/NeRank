@@ -1,4 +1,7 @@
 # .gitignore file for PDER
+
 data/
+
 raw/
+
 .idea/
