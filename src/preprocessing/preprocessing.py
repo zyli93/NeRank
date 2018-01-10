@@ -94,10 +94,11 @@ def process_QA(data_dir):
     :return:
     """
     print("Processing QA relations ...")
-
     POST_Q = "Posts_Q.json"
     POST_A = "Posts_A.json"
     OUTPUT = "QAU_Map.json"
+
+    logger = logging.getLogger(__name__)
 
     if not os.path.exists(data_dir + POST_Q):
         raise IOError("file {} does NOT exist".format(data_dir + POST_Q))
@@ -112,20 +113,18 @@ def process_QA(data_dir):
         for line in fin_q:
             data = json.loads(line)
             try:
-                qid, owner_id = data.get('Id'), data.get('OwnerUserId')
-                acc_id = data.get('AcceptedAnswerId')
-
-                qa_map[qid] = {
-                    'QuestionId': qid,
-                    'QuestionOwnerId': owner_id,
-                    'AcceptedAnswerId': acc_id,
-                    'AnswerOwnerList': []
-                }
+                qid, owner_id = data.get('Id', None), data.get('OwnerUserId', None)
+                acc_id = data.get('AcceptedAnswerId', None)
+                # Add to qa_map only when all three attributes are not None
+                if qid and owner_id and acc_id:
+                    qa_map[qid] = {
+                        'QuestionId': qid,
+                        'QuestionOwnerId': owner_id,
+                        'AcceptedAnswerId': acc_id,
+                        'AnswerOwnerList': []
+                    }
             except:
-                # TODO: handle exceptional data
-                logger = logging.getLogger(__name__)
-                logger.info("Error at PQA: " + str(data))
-                # print(data)
+                logger.error("Error at process_QA 1: "+ str(data))
                 continue
 
     # Process answer information
@@ -133,20 +132,17 @@ def process_QA(data_dir):
         for line in fin_a:
             data = json.loads(line)
             try:
-                aid, owner_id = data['Id'], data['OwnerUserId']
-                par_id = data['ParentId']
-
+                aid, owner_id = data.get('Id', None), data.get('OwnerUserId', None)
+                par_id = data.get('ParentId', None)
                 entry = qa_map.get(par_id, None)
-                if entry:
+                if aid and owner_id and par_id and entry:
                     entry['AnswerOwnerList'].append((aid, owner_id))
                 else:
-                    print("Answer {} belongs to unknown Question {}"
-                          .format(aid, par_id), file=sys.stderr)
-            except:
-                # TODO: handle exceptional data
-                logger = logging.getLogger(__name__)
-                logger.info("Error at PQA: " + str(data))
-                # print(data)
+                    logger.error("Answer {} belongs to unknown Question {} at Process QA"
+                                 .format(aid, par_id))
+            except IndexError as e:
+                logger.error(e)
+                logger.info("Error at process_QA 2: " + str(data))
                 continue
 
     # Sort qid list, write to file by order of qid
@@ -157,8 +153,6 @@ def process_QA(data_dir):
     with open(data_dir + OUTPUT, 'w') as fout:
         for q in qid_list:
             fout.write(json.dumps(qa_map[q]) + "\n")
-    print("Done! Question-Answer-User relationships are stored in"
-          "{}".format(data_dir + OUTPUT))
 
 
 def extract_question_user(data_dir, parsed_dir):
@@ -173,7 +167,6 @@ def extract_question_user(data_dir, parsed_dir):
     :param parsed_dir: parsed file directory
     :return:
     """
-    print("Extracting Question User pairs ...")
     INPUT = "QAU_Map.json"
     OUTPUT = "q_u.txt"
 
@@ -186,10 +179,7 @@ def extract_question_user(data_dir, parsed_dir):
                 data = json.loads(line)
                 qid = data['QuestionId']
                 owner_id = data['QuestionOwnerId']
-                print("{} {}".format(str(qid), str(owner_id)),
-                      file=fout)
-    print("Done! Question-User pairs are in {}"
-          .format(parsed_dir + OUTPUT))
+                print("{} {}".format(str(qid), str(owner_id)), file=fout)
 
 
 def extract_question_answer(data_dir, parsed_dir):
@@ -207,22 +197,28 @@ def extract_question_answer(data_dir, parsed_dir):
     INPUT = "QAU_Map.json"
     OUTPUT_QA = "q_a.txt"
     OUTPUT_AU = "a_u.txt"
+    OUTPUT_QAC = 'q_ac.txt'
 
     if not os.path.exists(data_dir + INPUT):
         IOError("Can NOT find {}".format(data_dir + INPUT))
 
     with open(data_dir + INPUT, "r") as fin, \
             open(parsed_dir + OUTPUT_QA, "w") as fout_qa, \
-            open(parsed_dir + OUTPUT_AU, "w") as fout_au:
+            open(parsed_dir + OUTPUT_AU, "w") as fout_au, \
+            open(parsed_dir + OUTPUT_QAC, "w") as fout_qac:
         for line in fin:
             data = json.loads(line)
             qid = data['QuestionId']
             au_list = data['AnswerOwnerList']
+            acid = data['AcceptedAnswerId']
             for aid, owner_id in au_list:
                 print("{} {}".format(str(qid), str(aid)),
-                        file=fout_qa)
+                      file=fout_qa)
                 print("{} {}".format(str(aid), str(owner_id)),
-                        file=fout_au)
+                      file=fout_au)
+
+            print("{} {}".format(str(qid), str(acid)),
+                  file=fout_qac)
 
 
 def extract_question_content(data_dir, parsed_dir):
@@ -241,15 +237,15 @@ def extract_question_content(data_dir, parsed_dir):
     OUTPUT_C_NSW = "q_content_nsw.txt"  # Question content, no stop word
 
     logger = logging.getLogger(__name__)
+
     if not os.path.exists(data_dir + INPUT):
         IOError("Can NOT locate {}".format(data_dir + INPUT))
 
     sw_set = set(stopwords.words('english'))  # Create the stop word set
 
-    """
-    We will try both with or without stopwords to 
-    check out the performance.
-    """
+
+    # We will try both with or without stopwords to
+    # check out the performance.
     with open(data_dir + INPUT, "r") as fin, \
             open(parsed_dir + OUTPUT_T, "w") as fout_t, \
             open(parsed_dir + OUTPUT_T_NSW, "w") as fout_t_nsw, \
@@ -271,10 +267,8 @@ def extract_question_content(data_dir, parsed_dir):
                 print("{} {}".format(qid, title_nsw), file=fout_t_nsw)  # Without stopword
                 print("{} {}".format(qid, title), file=fout_t)  # With stopword
             except:
-                # TODO: Handling the exception data
-                # But honestly, if using `dict.get`, there won't be exceptions.
-                logger.info("Error at EQC: " + str(data))
-                # print(data)
+                logger.info("Error at Extracting question content and title: "
+                            + str(data))
                 continue
 
 
@@ -290,20 +284,6 @@ if __name__ == "__main__":
     PARSED_DIR = "./data/parsed/{}/".format(DATASET)
     README_FILE = "./data/README.txt"
 
-    # logging.basicConfig(level=logging.DEBUG,
-    #                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
-    #                     datefmt='%a, %d %b %Y %H:%M:%S',
-    #                     filename=DATA_DIR + "mylog.log",
-    #                     filemode='w')
-
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-
-    log_fh = logging.FileHandler(DATA_DIR + "log.log")
-    log_fh.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    log_fh.setFormatter(formatter)
-    logger.addHandler(log_fh)
 
     if not os.path.exists(RAW_DIR):
         print("{} dir or path doesn't exist.\n"
@@ -322,6 +302,20 @@ if __name__ == "__main__":
               "Creating a foler for that."
               .format(PARSED_DIR))
         os.makedirs(PARSED_DIR)
+
+
+    if os.path.exists(DATA_DIR + "log.log"):
+        os.remove(DATA_DIR + "log.log")
+
+    # Setting up loggers
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    log_fh = logging.FileHandler(DATA_DIR + "log.log")
+    log_fh.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    log_fh.setFormatter(formatter)
+    logger.addHandler(log_fh)
 
 
     print("******************************************")
@@ -345,7 +339,5 @@ if __name__ == "__main__":
     print("Done!")
 
 
-# TODO: Consider following cases. (1) A question has no accepted answer. (2) A question has qid, aid, xxx, as None.
 # TODO: Re-organize the folders and the data storage.
-# TODO: Consider whether an empty or null value will affect later functions.
 
