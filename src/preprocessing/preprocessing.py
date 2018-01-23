@@ -20,27 +20,27 @@ def clean_html(x):
 
 
 def clean_str(string):
-    """
-    Cleaning strings of content or title
-    Original taken from
-    https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
-    :param string: The string to be handled.
-    :return:
-    """
-    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
-    string = re.sub(r"\'s", " \'s", string)
-    string = re.sub(r"\'ve", " \'ve", string)
-    string = re.sub(r"n\'t", " n\'t", string)
-    string = re.sub(r"\'re", " \'re", string)
-    string = re.sub(r"\'d", " \'d", string)
-    string = re.sub(r"\'ll", " \'ll", string)
-    string = re.sub(r",", " , ", string)
-    string = re.sub(r"!", " ! ", string)
-    string = re.sub(r"\(", " \( ", string)
-    string = re.sub(r"\)", " \) ", string)
-    string = re.sub(r"\?", " \? ", string)
-    string = re.sub(r"\s{2,}", " ", string)
-    return string.strip().lower()
+      """
+      Cleaning strings of content or title
+      Original taken from
+      https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
+      :param string: The string to be handled.
+      :return:
+      """
+      string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+      string = re.sub(r"\'s", " \'s", string)
+      string = re.sub(r"\'ve", " \'ve", string)
+      string = re.sub(r"n\'t", " n\'t", string)
+      string = re.sub(r"\'re", " \'re", string)
+      string = re.sub(r"\'d", " \'d", string)
+      string = re.sub(r"\'ll", " \'ll", string)
+      string = re.sub(r",", " , ", string)
+      string = re.sub(r"!", " ! ", string)
+      string = re.sub(r"\(", " \( ", string)
+      string = re.sub(r"\)", " \) ", string)
+      string = re.sub(r"\?", " \? ", string)
+      string = re.sub(r"\s{2,}", " ", string)
+      return string.strip().lower()
 
 
 def remove_stopwords(string, stopword_set):
@@ -79,14 +79,14 @@ def split_post(raw_dir, data_dir):
                 fout_q.write(json.dumps(attr) + "\n")
             elif attr['PostTypeId'] == '2':
                 fout_a.write(json.dumps(attr) + "\n")
-    print("Done! Generated {} and {}."
-          .format(data_dir + "Posts_Q.json", data_dir + "Posts_A.json"))
+    # print("Done! Generated {} and {}."
+    #       .format(data_dir + "Posts_Q.json", data_dir + "Posts_A.json"))
     return
 
 
 def process_QA(data_dir):
     """
-    Process QA, extract useful information.
+    Process QA, extract attributes used in this project
     Get rid of the text information,
     only record the question-user - answer-user relation
 
@@ -98,6 +98,7 @@ def process_QA(data_dir):
     POST_A = "Posts_A.json"
     OUTPUT = "QAU_Map.json"
 
+    # Get logger to log exceptions
     logger = logging.getLogger(__name__)
 
     if not os.path.exists(data_dir + POST_Q):
@@ -223,8 +224,8 @@ def extract_question_answer(data_dir, parsed_dir):
 
 def extract_question_content(data_dir, parsed_dir):
     """
-    Extract Questions, Content pairs from Question file
-    Question Content pair format: <qid> <content>
+    Extract questions, content pairs from question file
+    question content pair format: <qid> <content>
     We extract both with and without stop-word version
     :param data_dir: data directory
     :param parsed_dir: parsed file directory
@@ -262,10 +263,14 @@ def extract_question_content(data_dir, parsed_dir):
                 content_nsw = remove_stopwords(content, sw_set)
                 title_nsw = remove_stopwords(title, sw_set)
 
-                print("{} {}".format(qid, content_nsw), file=fout_c_nsw)  # Without stopword
-                print("{} {}".format(qid, content), file=fout_c)  # With stopword
-                print("{} {}".format(qid, title_nsw), file=fout_t_nsw)  # Without stopword
-                print("{} {}".format(qid, title), file=fout_t)  # With stopword
+                print("{} {}".format(qid, content_nsw),
+                      file=fout_c_nsw)  # Without stopword
+                print("{} {}".format(qid, content),
+                      file=fout_c)  # With stopword
+                print("{} {}".format(qid, title_nsw),
+                      file=fout_t_nsw)  # Without stopword
+                print("{} {}".format(qid, title),
+                      file=fout_t)  # With stopword
             except:
                 logger.info("Error at Extracting question content and title: "
                             + str(data))
