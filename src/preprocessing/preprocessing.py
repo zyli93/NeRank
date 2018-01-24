@@ -3,7 +3,6 @@
 import sys, os
 import re
 import logging
-from html.parser import HTMLParser
 from lxml import etree
 from bs4 import BeautifulSoup
 
@@ -93,7 +92,6 @@ def process_QA(data_dir):
     :param data_dir: the dir where primitive data is stored
     :return:
     """
-    print("Processing QA relations ...")
     POST_Q = "Posts_Q.json"
     POST_A = "Posts_A.json"
     OUTPUT = "QAU_Map.json"
@@ -277,6 +275,39 @@ def extract_question_content(data_dir, parsed_dir):
                 continue
 
 
+def extract_answer_score(data_dir, parsed_dir):
+    """
+    Extract the answers vote, a.k.a. Scores.
+    This information might be useful when
+    the accepted answer is not selected.
+    :param data_dir: Input data dir
+    :param parsed_dir: Output data dir
+    :return:
+    """
+    INPUT = "Posts_A.json"
+    OUTPUT = "a_score.txt"
+
+    logger = logging.getLogger(__name__)
+
+    if not os.path.exists(data_dir + INPUT):
+        IOError("Cannot find file{}".format(data_dir + INPUT))
+
+    with open(data_dir + INPUT, "r") as fin, \
+        open(parsed_dir + OUTPUT, "w") as fout:
+        for line in fin:
+            data = json.loads(line)
+            try:
+                aid = data.get('Id')
+                score = data.get('Score')
+
+                print("{} {}".format(aid, score),
+                      file=fout)
+            except:
+                logging.info("Error at Extracting answer score: "
+                             + str(data))
+                continue
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 + 1:
         print("\t Usage: {} [name of dataset]"
@@ -326,10 +357,12 @@ if __name__ == "__main__":
     print("******************************************")
 
     # Split contest to question and answer
+    print("Splitting Posts to Questions and Answers ...")
     split_post(raw_dir=RAW_DIR, data_dir=DATA_DIR)
 
     # Extract question-user, answer-user, and question-answer information
     # Generate Question and Answer/User map
+    print("Generating Q-A maps ...")
     process_QA(data_dir=DATA_DIR)
 
     print("Extracting Uq - Q pairs ...")
@@ -340,6 +373,9 @@ if __name__ == "__main__":
 
     print("Extracting Q - Q Content, Title pairs ...")
     extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+
+    print("Extracting Answers' Scores ...")
+    extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     print("Done!")
 
