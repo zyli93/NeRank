@@ -56,20 +56,27 @@ class RandomWalkGenerator:
                                      "A_" + unit[1]])
             G.add_edges_from(QA_edge_list)
 
+
     def get_nodelist(self, type=None):
-        """ Get specific type of nodelist in the graph
+        """ Get specific type or all nodes of nodelist in the graph
 
         Args:
-            type - the entity type of the entity
+            type - The entity type of the entity.
+                   If set as `None`, then all types of nodes would be returned.
 
         Return:
             nodelist - the list of node with `type`
         """
         G = self.G
+
+        if not G.number_of_edges() or not G.number_of_nodes():
+            sys.exit("Graph should be initialized before get_nodelist()!")
+
         if not type:
             return list(G.nodes)
         return [node for node in list(G.nodes)
                 if node[0] == type]
+
 
     def generate_walks(self, patterns, alpha):
         """ Generate Random Walk
@@ -91,15 +98,17 @@ class RandomWalkGenerator:
         rand = random.Random(0)
 
         if not G.number_of_edges() or not G.number_of_nodes():
-            sys.exit("Graph not initialized!")
+            sys.exit("Graph should be initialized before generate_walks()!")
 
         walks = []
         nodes = list(G.nodes)
 
-        for meta_pattern in patterns:
-            for cnt in range(num_walks):
-                nodes = self.get_nodelist()
-                rand.shuffle(nodes)
+        for meta_pattern in patterns:  # Generate by patterns
+            for cnt in range(num_walks):  # Iterate the node set for cnt times
+
+                nodes = self.get_nodelist()  # TODO: is this necessary?
+                rand.shuffle(nodes)  # TODO: and this?
+                # TODO: maybe first get_nodelist("R") and then shuffle
                 for node in self.get_nodelist("R"):
                     walks.append(
                         self.__meta_path_walk(
@@ -108,8 +117,10 @@ class RandomWalkGenerator:
                             rand=rand))
         return walks
 
+
     def __meta_path_walk(self, rand, start,
-                         alpha=0.0, patterns="AQRQA", walk_len=50):
+                         alpha=0.0, pattern="AQRQA", walk_len=50):
+        # TODO: what does this alpha mean? how about other params of deep walk?
         """Single Walk Generator
 
         Generating a single random walk that follows a meta path of `pattern`
@@ -131,6 +142,6 @@ class RandomWalkGenerator:
 
 
 
-        return walks
+        return walk
 
 
