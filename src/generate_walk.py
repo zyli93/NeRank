@@ -1,12 +1,16 @@
-"""Random walk generator
+"""
+    Random walk generator
 
-Generating random walks on our Uq, Ua, and Q network using NetworkX.
+    Author:
+        Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@ucla.edu>
 
-Author: Zeyu Li zyli@cs.ucla.edu
+    Description:
+        Generating random walks on our Uq, Ua, and Q network using NetworkX.
+
 
 """
 
-import os, sys, argparse
+import os, sys
 import networkx as nx
 import random
 
@@ -15,39 +19,43 @@ class RandomWalkGenerator:
     """RandomWalkGenerator
 
     Args:
+        dataset     - the dataset to work on
         length      - the length of random walks to be generated
         num_walks   - the number of random walks start from each node
-
-
     """
 
-    def __init__(self, length=100, num_walks=10000):
+    def __init__(self, dataset, length=100, num_walks=10000):
         self._walk_length = length
         self._num_walks = num_walks
+        self._dataset = dataset
         self.G = nx.Graph()
 
-    def initialize(self, uqq_file, qua_file):
+    def initialize(self):
         """ Initialize Graph
 
         Initialize graph with Uq-Q pairs and Q-Ua pairs.
         We use following Uppercase letter
 
         Args:
-            uqq_file - Input file containing Uq-Q pairs
-            qua_file - Input file containing Q-Uq pairs
+            QR_file - Input file containing Q-R pairs
+            QA_file - Input file containing Q-A pairs
 
         """
+
+        DATA_DIR = "../data/parsed/" + self._dataset + "/"
+        QR_file = DATA_DIR + "Q_R.txt"
+        QA_file = DATA_DIR + "Q_A.txt"
         G = self.G
         # Read in Uq-Q pairs
-        with open(uqq_file, "r") as fin:
+        with open(QR_file, "r") as fin:
             lines = fin.readlines()
             RQ_edge_list = []
             for line in lines:
                 unit = line.strip().split()
-                RQ_edge_list.append(["R_" + unit[0],
-                                     "Q_" + unit[1]])
+                RQ_edge_list.append(["Q_" + unit[0],
+                                     "R_" + unit[1]])
             G.add_edges_from(RQ_edge_list)
-        with open(qua_file, "r") as fin:
+        with open(QA_file, "r") as fin:
             lines = fin.readlines()
             QA_edge_list = []
             for line in lines:
@@ -101,30 +109,24 @@ class RandomWalkGenerator:
             sys.exit("Graph should be initialized before generate_walks()!")
 
         walks = []
-        nodes = list(G.nodes)
 
         for meta_pattern in patterns:  # Generate by patterns
-            start_entity_type = patterns[0]
+            print("Now generating meta-paths from pattern: \"{}\" ..."
+                  .format(meta_pattern))
+            start_entity_type = meta_pattern[0]
+            start_node_list = self.get_nodelist(start_entity_type)
             for cnt in range(num_walks):  # Iterate the node set for cnt times
-
-                # TODO: maybe first get_nodelist("R") and then shuffle
-                start_node_list = self.get_nodelist(start_entity_type)
+                rand.shuffle(start_node_list)
                 for start_node in start_node_list:
                     walks.append(
                         self.__meta_path_walk(
-                            start=start_node, alpha=alpha,
-                            pattern=meta_pattern,
-                            rand=rand))
+                            start=start_node,
+                            alpha=alpha,
+                            pattern=meta_pattern))
         return walks
 
 
-    def __meta_path_walk(self,
-                         rand=random.Random(),
-                         start=None,
-                         alpha=0.0,
-                         pattern=None,
-                         walk_len=50):
-        # TODO: what does this alpha mean? how about other params of deep walk?
+    def __meta_path_walk(self, start=None, alpha=0.0,pattern=None):
         """Single Walk Generator
 
         Generating a single random walk that follows a meta path of `pattern`
@@ -143,6 +145,8 @@ class RandomWalkGenerator:
         def type_of(node_id):
             return node_id[0]
 
+
+        rand = random.Random()
         # Checking pattern is correctly initialized
         if not pattern:
             sys.exit("Pattern is not specified when generating meta-path walk")
@@ -155,20 +159,50 @@ class RandomWalkGenerator:
         cur_node = start
 
         # Generating meta-paths
-        while n < walk_len or pat_ind != 1:
+        while len(walk) <= self._walk_length or pat_ind != len(pattern):
 
             # Updating the pattern index
             pat_ind = pat_ind if pat_ind != len(pattern) else 1
 
-            possible_next_node = [neighbor
-                                  for neighbor in G.neighbors(cur_node)
-                                  if type_of(neighbor) == pattern[pat_ind]]
-            next_node = rand.choice(possible_next_node)
-            walk.append(next_node)
+            # Decide whether to restart
+            if rand.random() >= alpha:
+                # Find all possible next neighbors
+                possible_next_node = [neighbor
+                                      for neighbor in G.neighbors(cur_node)
+                                      if type_of(neighbor) == pattern[pat_ind]]
+                # Random choose next node
+                next_node = rand.choice(possible_next_node)
+            else:
+                next_node = walk[0]
 
-            n += 1
+            walk.append(next_node)
+            cur_node = next_node
             pat_ind += 1
 
-        return walk
+        return " ".join(walk)
+
+
+    def write_metapaths(self, walks):
+        """Write Metapaths to files
+
+        Args:
+            walks - The walks generated by `generate_walks`
+        """
+
+        DATA_DIR = "../data/metapath/" + self._dataset + "/"
+        OUTPUT = DATA_DIR + "metapath.txt"
+        with open(OUTPUT, "w") as fout:
+            for walk in walks:
+                print("{}".format(walk), file=fout)
+
+
+
+if __name__ == "__main__":
+    gw = RandomWalkGenerator(length=15, num_walks=2, dataset="3dprinting")
+    gw.initialize()
+    walks = gw.generate_walks(patterns=["AQRQA", "AQA"], alpha=0)
+    print(walks)
+
+
 
 

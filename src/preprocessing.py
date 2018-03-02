@@ -1,5 +1,15 @@
 #!/home/zeyu/anaconda3/bin/python3.6
 
+"""
+    Preprocessing
+
+    Author:
+        Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@ucla.edu>
+
+    Description:
+        Take in the Very raw data and produce a ready-to-use version
+"""
+
 import sys, os
 import re
 import logging
@@ -19,35 +29,42 @@ def clean_html(x):
 
 
 def clean_str(string):
-      """
-      Cleaning strings of content or title
-      Original taken from
-      https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
-      :param string: The string to be handled.
-      :return:
-      """
-      string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
-      string = re.sub(r"\'s", " \'s", string)
-      string = re.sub(r"\'ve", " \'ve", string)
-      string = re.sub(r"n\'t", " n\'t", string)
-      string = re.sub(r"\'re", " \'re", string)
-      string = re.sub(r"\'d", " \'d", string)
-      string = re.sub(r"\'ll", " \'ll", string)
-      string = re.sub(r",", " , ", string)
-      string = re.sub(r"!", " ! ", string)
-      string = re.sub(r"\(", " \( ", string)
-      string = re.sub(r"\)", " \) ", string)
-      string = re.sub(r"\?", " \? ", string)
-      string = re.sub(r"\s{2,}", " ", string)
-      return string.strip().lower()
+    """Clean up the string
+
+    Cleaning strings of content or title
+    Original taken from [https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py]
+
+    Args:
+        string - the string to clean
+
+    Return:
+        _ - the cleaned string
+    """
+    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+    string = re.sub(r"\'s", " \'s", string)
+    string = re.sub(r"\'ve", " \'ve", string)
+    string = re.sub(r"n\'t", " n\'t", string)
+    string = re.sub(r"\'re", " \'re", string)
+    string = re.sub(r"\'d", " \'d", string)
+    string = re.sub(r"\'ll", " \'ll", string)
+    string = re.sub(r",", " , ", string)
+    string = re.sub(r"!", " ! ", string)
+    string = re.sub(r"\(", " \( ", string)
+    string = re.sub(r"\)", " \) ", string)
+    string = re.sub(r"\?", " \? ", string)
+    string = re.sub(r"\s{2,}", " ", string)
+    return string.strip().lower()
 
 
 def remove_stopwords(string, stopword_set):
-    """
-    
-    :param string:
-    :param stopword_set:
-    :return:
+    """Removing Stopwords
+
+    Args:
+        string - the input string to remove stopwords
+        stopword_set - the set of stopwords
+
+    Return:
+        _ - the string that has all the stopwords removed
     """
     word_tokens = word_tokenize(string)
     filtered_string = [word for word in word_tokens
@@ -56,13 +73,14 @@ def remove_stopwords(string, stopword_set):
 
 
 def split_post(raw_dir, data_dir):
-    """
+    """ Split the post
+
     Split post to question and answer,
     keep all information, output to file
 
-    :param raw_dir: raw data directory
-    :param data_dir: parsed data directory
-    :return: nothing
+    Args:
+        raw_dir - raw data directory
+        data_dir - parsed data directory
     """
     print("Splitting Questions and Answers ...")
     with open(data_dir + "Posts_Q.json", "w") as fout_q, \
@@ -78,19 +96,18 @@ def split_post(raw_dir, data_dir):
                 fout_q.write(json.dumps(attr) + "\n")
             elif attr['PostTypeId'] == '2':
                 fout_a.write(json.dumps(attr) + "\n")
-    # print("Done! Generated {} and {}."
-    #       .format(data_dir + "Posts_Q.json", data_dir + "Posts_A.json"))
     return
 
 
 def process_QA(data_dir):
-    """
-    Process QA, extract attributes used in this project
+    """Process QA
+
+    Extract attributes used in this project
     Get rid of the text information,
     only record the question-user - answer-user relation
 
-    :param data_dir: the dir where primitive data is stored
-    :return:
+    Args:
+        data_dir - the dir where primitive data is stored
     """
     POST_Q = "Posts_Q.json"
     POST_A = "Posts_A.json"
@@ -155,19 +172,22 @@ def process_QA(data_dir):
 
 
 def extract_question_user(data_dir, parsed_dir):
-    """
-    Extract Question User pairs and output to file.
-    Format: <qid> <uid>
-    E.g.
-    101 40
-    145 351
+    """Extract Question User pairs and output to file.
 
-    :param data_dir: data directory
-    :param parsed_dir: parsed file directory
-    :return:
+    Extract "Q" and "R"
+
+    Format:
+        <Qid> <Rid>
+    E.g.
+        101 40
+        145 351
+
+    Args:
+        data_dir - data directory
+        parsed_dir - parsed file directory
     """
     INPUT = "QAU_Map.json"
-    OUTPUT = "q_u.txt"
+    OUTPUT = "Q_R.txt"
 
     if not os.path.exists(data_dir + INPUT):
         IOError("Can NOT find {}".format(data_dir + INPUT))
@@ -181,59 +201,65 @@ def extract_question_user(data_dir, parsed_dir):
                 print("{} {}".format(str(qid), str(owner_id)), file=fout)
 
 
-def extract_question_answer(data_dir, parsed_dir):
-    """
-    Extract Question Answer, Answer User pairs and output to file.
-    The list of AnswerOwnerList contains <aid>-<owner_id> pairs
+def extract_question_answer_user(data_dir, parsed_dir):
+    """Extract Question, Answer User pairs and output to file.
 
-    QA pair file Format: <qid> <aid>
-    AU pair file Format: <aid> <owner_id>
+    (1) Extract "Q" - "A"
+        The list of AnswerOwnerList contains <aid>-<owner_id> pairs
 
-    :param data_dir: data directory
-    :param parsed_dir: parsed file directory
-    :return:
+        Format:
+            <Qid> <Aid>
+        E.g.
+            100 1011
+            21 490
+    (2) Extract "Q" - Accepted answer
+
+        Format:
+            <Qid> <Acc_Ans_id>
+
+    Args:
+        data_dir - data directory
+        parsed_dir - parsed file directory
     """
     INPUT = "QAU_Map.json"
-    OUTPUT_QA = "q_a.txt"
-    OUTPUT_AU = "a_u.txt"
-    OUTPUT_QAC = 'q_ac.txt'
+    OUTPUT = "Q_A.txt"
+    OUTPUT_ACCEPT = "Q_ACC.txt"
 
     if not os.path.exists(data_dir + INPUT):
         IOError("Can NOT find {}".format(data_dir + INPUT))
 
     with open(data_dir + INPUT, "r") as fin, \
-            open(parsed_dir + OUTPUT_QA, "w") as fout_qa, \
-            open(parsed_dir + OUTPUT_AU, "w") as fout_au, \
-            open(parsed_dir + OUTPUT_QAC, "w") as fout_qac:
+            open(data_dir + OUTPUT_ACCEPT, "w") as fout_acc, \
+            open(parsed_dir + OUTPUT, "w") as fout:
         for line in fin:
             data = json.loads(line)
             qid = data['QuestionId']
             au_list = data['AnswerOwnerList']
             acid = data['AcceptedAnswerId']
-            for aid, owner_id in au_list:
-                print("{} {}".format(str(qid), str(aid)),
-                      file=fout_qa)
-                print("{} {}".format(str(aid), str(owner_id)),
-                      file=fout_au)
-
+            for aid, ans_owner_id in au_list:
+                print("{} {}".format(str(qid), str(ans_owner_id)),
+                      file=fout)
             print("{} {}".format(str(qid), str(acid)),
-                  file=fout_qac)
+                  file=fout_acc)
 
 
 def extract_question_content(data_dir, parsed_dir):
-    """
-    Extract questions, content pairs from question file
-    question content pair format: <qid> <content>
+    """Extract questions, content pairs from question file
+
+    Question content pair format:
+        <qid> <content>
     We extract both with and without stop-word version
-    :param data_dir: data directory
-    :param parsed_dir: parsed file directory
-    :return:
+        which is signified by "_nsw"
+
+    Args:
+        data_dir - data directory
+        parsed_dir - parsed file directory
     """
     INPUT = "Posts_Q.json"
-    OUTPUT_T = "q_title.txt"  # Question title
-    OUTPUT_T_NSW = "q_title_nsw.txt"  # Question title, no stop word
-    OUTPUT_C = "q_content.txt"  # Question content
-    OUTPUT_C_NSW = "q_content_nsw.txt"  # Question content, no stop word
+    OUTPUT_T = "Q_title.txt"  # Question title
+    OUTPUT_T_NSW = "Q_title_nsw.txt"  # Question title, no stop word
+    OUTPUT_C = "Q_content.txt"  # Question content
+    OUTPUT_C_NSW = "Q_content_nsw.txt"  # Question content, no stop word
 
     logger = logging.getLogger(__name__)
 
@@ -276,13 +302,14 @@ def extract_question_content(data_dir, parsed_dir):
 
 
 def extract_answer_score(data_dir, parsed_dir):
-    """
-    Extract the answers vote, a.k.a. Scores.
+    """Extract the answers vote, a.k.a. Scores.
+
     This information might be useful when
-    the accepted answer is not selected.
-    :param data_dir: Input data dir
-    :param parsed_dir: Output data dir
-    :return:
+        the accepted answer is not selected.
+
+    Args:
+        data_dir - Input data dir
+        parsed_dir - Output data dir
     """
     INPUT = "Posts_A.json"
     OUTPUT = "a_score.txt"
@@ -308,13 +335,8 @@ def extract_answer_score(data_dir, parsed_dir):
                 continue
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1 + 1:
-        print("\t Usage: {} [name of dataset]"
-              .format(sys.argv[0]), file=sys.stderr)
-        sys.exit(0)
-
-    DATASET = sys.argv[1]
+def preprocess(dataset):
+    DATASET = dataset
     RAW_DIR = "./raw/{}/".format(DATASET)
     DATA_DIR= "./data/{}/".format(DATASET)
     PARSED_DIR = "./data/parsed/{}/".format(DATASET)
@@ -369,7 +391,7 @@ if __name__ == "__main__":
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     print("Extracting Q - A, A - U pairs ...")
-    extract_question_answer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+    extract_question_answer_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     print("Extracting Q - Q Content, Title pairs ...")
     extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
@@ -380,5 +402,9 @@ if __name__ == "__main__":
     print("Done!")
 
 
-# TODO: Re-organize the folders and the data storage.
-
+if __name__ == "__main__":
+    if len(sys.argv) > 1 + 1:
+        print("\t Usage: {} [name of dataset]"
+              .format(sys.argv[0]), file=sys.stderr)
+        sys.exit(0)
+    preprocess(sys.argv[1])

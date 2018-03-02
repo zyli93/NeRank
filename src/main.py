@@ -1,24 +1,40 @@
 from generate_walk import RandomWalkGenerator
 
-import argparse
+from optparse import OptionParser
 
 
 if __name__ == '__main__':
     """Generating random walks and output to file
 
     Args: 
-        -l, --length \t Length of the random walk to be generated 
-        -n, --number \t Number of random walks to be generated 
+        -l, --length 
+        -n, --number 
+        -s, --size
+        -a, --alpha
+        -o, --output_path
 
     Returns:
-        Write generated random   
+        Write generated meta-path
 
     """
-    opt_parser = argparse.ArgumentParser()
-    opt_parser.add_argument("-d", "--dataset", type=str,
-                            help="The dataset to work on.")
-    opt_parser.add_argument("-l", "--length", type=int,
-                            help="The length of the random walk to be generated.")
-    opt_parser.add_argument("-s", "--size", type=int,
-                            help="The number to total random walks to be generated.")
+
+    parser = OptionParser()
+    parser.add_option("-d", "--dataset", type="string",
+                      dest="dataset",
+                      help="The dataset to work on.")
+    parser.add_option("-l", "--length", type="int",
+                      dest="length",
+                      help="The length of the random walk to be generated.")
+    parser.add_option("-s", "--size", type="int",
+                      dest="size",
+                      help="The count of each node being iterated.")
+    parser.add_option("-a", "--alpha", type="float",
+                      dest="alpha",
+                      help="The probability of restarting in meta-path generating")
+    parser.add_option("-m", "--meta_paths", type="string",
+                      dest="meta_paths",
+                      help="The target meta-paths used to generate the data file, split by space, enclose by \"\".")
+
+    (options, args) = parser.parse_args()
+
 
