@@ -104,22 +104,26 @@ class RandomWalkGenerator:
         nodes = list(G.nodes)
 
         for meta_pattern in patterns:  # Generate by patterns
+            start_entity_type = patterns[0]
             for cnt in range(num_walks):  # Iterate the node set for cnt times
 
-                nodes = self.get_nodelist()  # TODO: is this necessary?
-                rand.shuffle(nodes)  # TODO: and this?
                 # TODO: maybe first get_nodelist("R") and then shuffle
-                for node in self.get_nodelist("R"):
+                start_node_list = self.get_nodelist(start_entity_type)
+                for start_node in start_node_list:
                     walks.append(
                         self.__meta_path_walk(
-                            start=node, alpha=alpha,
+                            start=start_node, alpha=alpha,
                             pattern=meta_pattern,
                             rand=rand))
         return walks
 
 
-    def __meta_path_walk(self, rand, start,
-                         alpha=0.0, pattern="AQRQA", walk_len=50):
+    def __meta_path_walk(self,
+                         rand=random.Random(),
+                         start=None,
+                         alpha=0.0,
+                         pattern=None,
+                         walk_len=50):
         # TODO: what does this alpha mean? how about other params of deep walk?
         """Single Walk Generator
 
@@ -129,18 +133,41 @@ class RandomWalkGenerator:
             rand - an random object to generate random numbers
             start - starting node
             alpha - probability of restarts
-            pattern - the pattern according to which to generate walks
-            walk_len - the length of the generated walk
+            pattern - (string) the pattern according to which to generate walks
+            walk_len - (int) the length of the generated walk
 
         Return:
             walk - the single walk generated
 
         """
+        def type_of(node_id):
+            return node_id[0]
+
+        # Checking pattern is correctly initialized
+        if not pattern:
+            sys.exit("Pattern is not specified when generating meta-path walk")
+
         G = self.G
+        n, pat_ind = 1, 1
 
+        walk = [start]
 
+        cur_node = start
 
+        # Generating meta-paths
+        while n < walk_len or pat_ind != 1:
 
+            # Updating the pattern index
+            pat_ind = pat_ind if pat_ind != len(pattern) else 1
+
+            possible_next_node = [neighbor
+                                  for neighbor in G.neighbors(cur_node)
+                                  if type_of(neighbor) == pattern[pat_ind]]
+            next_node = rand.choice(possible_next_node)
+            walk.append(next_node)
+
+            n += 1
+            pat_ind += 1
 
         return walk
 

@@ -6,12 +6,12 @@
 PDER represents "Personalized Domain Expert Recommendation".
 
 ## TODO:
-[ ] Github
-    [ ] Readme
-    [ ] Remove unrelated directories and files
+- [ ] Github
+    - [ ] Readme
+    - [ ] Remove unrelated directories and files
 
-[ ] Coding
-    [ ] Construct `main.py`
-    [ ] `generate_walk.py`
+- [ ] Coding
+    - [ ] Construct `main.py`
+    - [ ] `generate_walk.py`
 
 
