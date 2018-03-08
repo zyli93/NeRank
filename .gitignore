@@ -7,3 +7,5 @@ raw/
 .idea/
 
 word2vec_model/
+
+notes/.ipynb_checkpoints/
