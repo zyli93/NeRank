@@ -13,10 +13,13 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 import numpy as np
+from data_loader import DataLoader
 
-class PDER(nn.Module):
+class myModel(nn.Module):
     """
     Model class
+
+    Heterogeneous Entity Embedding Based Recommendation
 
     TODO:
         - [ ] Parameters
@@ -24,9 +27,10 @@ class PDER(nn.Module):
         - [ ] Efficiency
             - [ ] Run the model in parallel
             - [ ] Move the model to CUDA
+        - [ ] Name
     """
     def __init__(self, vocab_size, embedding_dim):
-        super(PDER, self).__init__()
+        super(myModel, self).__init__()
 
         # u and v of vector of R, we will use u in the end
         self.ru_embeddings = nn.Embedding(vocab_size,
@@ -55,6 +59,7 @@ class PDER(nn.Module):
 
 
     def forward(self, u_pos, v_pos, v_neg, batch_size):
+
 
 
 
