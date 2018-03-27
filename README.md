@@ -12,6 +12,6 @@ PDER represents "Personalized Domain Expert Recommendation".
 
 - [ ] Coding
     - [ ] Construct `main.py`
-    - [ ] `generate_walk.py`
+    - [x] `generate_walk.py`
 
 

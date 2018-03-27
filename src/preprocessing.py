@@ -82,7 +82,6 @@ def split_post(raw_dir, data_dir):
         raw_dir - raw data directory
         data_dir - parsed data directory
     """
-    print("Splitting Questions and Answers ...")
     with open(data_dir + "Posts_Q.json", "w") as fout_q, \
             open(data_dir + "Posts_A.json", "w") as fout_a:
         parser = etree.iterparse(raw_dir + 'Posts.xml',
@@ -337,11 +336,11 @@ def extract_answer_score(data_dir, parsed_dir):
 
 def preprocess(dataset):
     DATASET = dataset
-    RAW_DIR = "./raw/{}/".format(DATASET)
-    DATA_DIR= "./data/{}/".format(DATASET)
-    PARSED_DIR = "./data/parsed/{}/".format(DATASET)
-    README_FILE = "./data/README.txt"
+    RAW_DIR = os.getcwd() + "/raw/{}/".format(DATASET)
+    DATA_DIR= os.getcwd() + "/data/{}/".format(DATASET)
+    PARSED_DIR = os.getcwd() + "/data/parsed/{}/".format(DATASET)
 
+    print("Preprocessing {} ...".format(dataset), end=" ")
 
     if not os.path.exists(RAW_DIR):
         print("{} dir or path doesn't exist.\n"
@@ -357,7 +356,7 @@ def preprocess(dataset):
 
     if not os.path.exists(PARSED_DIR):
         print("{} dir or path NOT found.\n"
-              "Creating a foler for that."
+              "Creating a folder for that."
               .format(PARSED_DIR))
         os.makedirs(PARSED_DIR)
 
@@ -375,28 +374,25 @@ def preprocess(dataset):
     log_fh.setFormatter(formatter)
     logger.addHandler(log_fh)
 
-
-    print("******************************************")
-
     # Split contest to question and answer
-    print("Splitting Posts to Questions and Answers ...")
+    # print("Splitting Posts to Questions and Answers ...")
     split_post(raw_dir=RAW_DIR, data_dir=DATA_DIR)
 
     # Extract question-user, answer-user, and question-answer information
     # Generate Question and Answer/User map
-    print("Generating Q-A maps ...")
+    # print("Generating Q-A maps ...")
     process_QA(data_dir=DATA_DIR)
 
-    print("Extracting Uq - Q pairs ...")
+    # print("Extracting Uq - Q pairs ...")
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    print("Extracting Q - A, A - U pairs ...")
+    # print("Extracting Q - A, A - U pairs ...")
     extract_question_answer_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    print("Extracting Q - Q Content, Title pairs ...")
+    # print("Extracting Q - Q Content, Title pairs ...")
     extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    print("Extracting Answers' Scores ...")
+    # print("Extracting Answers' Scores ...")
     extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     print("Done!")

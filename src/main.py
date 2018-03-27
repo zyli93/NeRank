@@ -1,7 +1,30 @@
 from generate_walk import MetaPathGenerator
+from preprocessing import preprocess
 
 import os, sys
 from optparse import OptionParser
+
+
+def runPDER(options):
+
+    # Check validity of preprocess
+    if type(options.preprocess) is not bool:
+        print("Invalid -p value. Should be \"True\" or \"False\"",
+              file=sys.stderr)
+        sys.exit()
+
+    if options.preprocess:
+        preprocess(options.dataset)
+
+    # preprocessing
+    mp_generator = MetaPathGenerator(length=options.length,
+                                     num_walks=options.size,
+                                     dataset=options.dataset)
+    walks = mp_generator.generate_metapaths(patterns=options.meta_paths.split(" "),
+                                            alpha=options.alpha)
+    mp_generator.write_metapaths(walks)
+
+
 
 
 if __name__ == '__main__':
@@ -13,6 +36,7 @@ if __name__ == '__main__':
         -s, --size
         -a, --alpha
         -m, --meta_paths
+        -p, --preprocess
 
     Returns:
         Write generated meta-path
@@ -36,13 +60,10 @@ if __name__ == '__main__':
                       dest="meta_paths",
                       help="The target meta-paths used to generate the data file, "
                            "split by space, enclose by \"\".")
+    parser.add_option("-p", "--preprocess", default=False,
+                      dest="preprocess", action="store_true",
+                      help="Adding it to indicate doing preprocessing.")
 
     (options, args) = parser.parse_args()
 
-    print("Generating Random Walks ...")
-    mp_generator = MetaPathGenerator(length=options.)
-
-    gw = MetaPathGenerator(length=15, num_walks=2, dataset="3dprinting")
-    walks = gw.generate_metapaths(patterns=["AQRQA", "AQA"], alpha=0)
-    gw.write_metapaths(walks)
-
+    runPDER(options)
