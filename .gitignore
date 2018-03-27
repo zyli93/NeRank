@@ -11,3 +11,5 @@ word2vec_model/
 notes/.ipynb_checkpoints/
 
 metapath/
+
+src/__pycache__/
