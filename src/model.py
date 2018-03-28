@@ -15,7 +15,7 @@ import torch.nn.functional as F
 import numpy as np
 from data_loader import DataLoader
 
-class myModel(nn.Module):
+class NeRank(nn.Module):
     """
     Model class
 
@@ -30,7 +30,7 @@ class myModel(nn.Module):
         - [ ] Name
     """
     def __init__(self, vocab_size, embedding_dim):
-        super(myModel, self).__init__()
+        super(NeRank, self).__init__()
 
         # u and v of vector of R, we will use u in the end
         self.ru_embeddings = nn.Embedding(vocab_size,

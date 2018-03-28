@@ -12,15 +12,17 @@ from torch.autograd import Variable
 import torch.optim as optim
 import torch.nn.functional as F
 
-from model import myModel
+from model import NeRank
 from data_loader import DataLoader
+
+import time
 
 class PDER:
     def __init__(self, inputfile, vocab_size=1000000, embedding_dim=200,
                  epoch_num=10, batch_size=16, window_size=5,
                  neg_sample_num=10):
-        # TODO: all params required
-        self.op = DataLoader()
+
+        self.helper = DataLoader() # TODO: all params required
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
@@ -32,22 +34,23 @@ class PDER:
 
 
     def train(self):
-        model = myModel()  #TODO: fill in params
+        model = NeRank()  #TODO: fill in params
         if torch.cuda.is_available():
             model.cuda()
-        optimizer = optim.SGD(model.parameters(), lr=0.2)
 
-        #TODO: change other optmizer
+        optimizer = optim.SGD(model.parameters(), lr=0.2) #TODO: to other optmizer
 
         for epoch in range(self.epoch_num):
+            start = time.time()
+            self.helper.process = True
 
-            while self.op.process:
+            while self.helper.process:
                 # TODO: Implement generate_batch
                 # TODO: what's in the batch
-                xx = self.op.generate_batch(self.window_size,
-                                         self.batch_size,
-                                         self.neg_sample_num)
-                xx = Variable(torch.LongTensor(xx))
+                xx = self.helper.generate_batch(self.window_size,
+                                                self.batch_size,
+                                                self.neg_sample_num)
+                xx = Variable(torch.LongTensor(xx)) # TODO: a series of xx
 
                 if torch.cuda.is_available():
                     xx = xx.cuda()
@@ -65,5 +68,5 @@ class PDER:
 
 
 if __name__ == "__main__":
-    my_model = PDER() # TODO: implement here
-    my_model.train()
+    pder = PDER() # TODO: implement here
+    pder.train()
