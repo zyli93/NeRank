@@ -12,4 +12,4 @@ notes/.ipynb_checkpoints/
 
 metapath/
 
-src/__pycache__/
+src/__pycache__/*

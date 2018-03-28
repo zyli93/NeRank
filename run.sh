@@ -5,7 +5,7 @@ COMPUTER=$(whoami)
 if [ "$COMPUTER" == "ww8" ] ; then
     PY=/home/ww8/anaconda3/bin/python
 else
-    PY=python3
+    PY=/home/zeyu/anaconda3/bin/python
 fi
 
 $PY src/main.py --dataset 3dprinting \
