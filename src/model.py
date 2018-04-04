@@ -48,6 +48,10 @@ class NeRank(nn.Module):
         self.embedding_dim = embedding_dim
         self.init_emb()
 
+        dl = DataLoader(dataset="3dprinting")
+
+
+
 
     def init_emb(self):
         """Initialize R and A embeddings"""
@@ -58,7 +62,21 @@ class NeRank(nn.Module):
         self.av_embeddings.weight.data.uniform_(-0, 0)
 
 
-    def forward(self, u_pos, v_pos, v_neg, batch_size):
+    def forward(self, upos, vpos, npos):
+        rupos, qupos, aupos = upos[0], upos[1], upos[2]
+        rvpos, qvpos, avpos = vpos[0], vpos[1], vpos[2]
+
+        # TODO: take care of the empty ones
+        embed_ru = self.ru_embeddings(rupos)
+        embed_au = self.au_embeddings(aupos)
+
+        embed_rv = self.rv_embeddings(rvpos)
+        embed_av = self.av_embeddings(avpos)
+
+
+
+
+
 
 
 

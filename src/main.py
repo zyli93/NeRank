@@ -31,7 +31,7 @@ def runPDER(options):
 
     # init data_loader
     print(2)
-    dl = DataLoader(vocab_size=1, dataset=options.dataset)
+    # dl = DataLoader(vocab_size=1, dataset=options.dataset)
 
 
 

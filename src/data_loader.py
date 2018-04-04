@@ -14,29 +14,31 @@ import os, sys
 
 import gensim
 
+data_index = 0
 
 class DataLoader():
-    def __init__(self, vocab_size, dataset):
+    def __init__(self, dataset):
         print("Initializing data_loader ...", end=" ")
         self.dataset = dataset
         self.mpfile = os.getcwd() + "/metapath/"+ self.dataset +".txt"
         self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
-        self.vocab_size = vocab_size
+        # self.vocab_size = vocab_size
 
         data = self.read_data()
         self.train_data = data
-
         self.count = self.count_dataset(data)
         self.sample_table = self.init_sample_table()
         self.w2vmodel = self.load_word2vec()  # **Time Consuming!**
         self.qid2sen = self.load_questions()
 
-        print("Done!")
+        self.process = True
 
+        print("Done!")
 
     def read_data(self):
         """
-        Read metapath dataset
+        Read metapath dataset,
+            load the dataset into data
 
         Return:
             data  -  the metapath dataset
@@ -47,6 +49,14 @@ class DataLoader():
             return data
 
     def count_dataset(self, data):
+        """
+        Read dataset and count the frequency
+
+        Args:
+            data  -  the list of meta-pathes.
+        Returns:
+            count  - the sorted list of
+        """
         count_dict = {}
         for path in data:
             for entity in path:
@@ -58,6 +68,12 @@ class DataLoader():
         return count
 
     def init_sample_table(self):
+        """
+        Create sample tables by P()^(3/4)
+
+        Return:
+            (sample_table)  -  the created sample table
+        """
         count = [ele[1] for ele in self.count]
         pow_freq = np.array(count) ** 0.75
         ratio = pow_freq / sum(pow_freq)
@@ -67,24 +83,78 @@ class DataLoader():
 
         for i in range(len(self.count)):
             sample_table += [self.count[i][0]] * count[i]
+        return np.array(sample_table)
 
-
-        pass
-
-
-    def generate_batch(self, window_size, batch_size, count):
+    def generate_batch(self, window_size, batch_size, neg_ratio):
         data = self.train_data
         global data_index
-        span = 2 * window_size + 1
-        context = np.ndarray(shape=(batch_size, 2 * window_size), dtype=str)
-            # TODO: check if the dtype is correct, can it be optimized?
-        labels = np.ndarray(shape=(batch_size), dtype=str)
-        pos_pair = []
+        pairs_list = []
+
+        batch = batch_size if batch_size + data_index < len(data) \
+            else len(data) - data_index
+
+        for i in range(batch):
+            pairs = self.slide_through(data_index, window_size)
+            if data_index + 1 < len(data):
+                data_index += 1
+            else:  # Meet the end of the dataset
+                self.process = False
+                break
+            pairs_list += pairs
+
+        u, v = zip(*pairs_list)
+        upos = self.separate_entity(u)
+        vpos = self.separate_entity(v)
+
+        batch_pair_count = len(pairs_list)
+        neg_samples = np.random.choice(self.sample_table,
+                                       size=(batch_pair_count * 2 * window_size,
+                                             batch_pair_count * neg_ratio))
+        # TODO: check the size of neg_samples
+        npos = self.separate_entity(neg_samples)
+        return upos, vpos, npos
+
+    def separate_entity(self, items):
+        """
+        Change a list from "A_1 Q_2 R_1 Q_2" to three vectors
+            A: 1 0 0 0
+            Q: 0 2 0 2
+            R: 0 0 1 0
+
+        Args:
+            items  -  the list of items
+
+        Return:
+            three dimensional matrix representing above matrix
+        """
+        D = {"A":0, "Q":1, "R":2}
+        sep = np.zeros(shape=(3, len(items)))
+        for index, item in enumerate(items):
+            split = item.split("_")
+            ent_type, ent_id = D[split[0]], int(split[1])
+            sep[ent_type][index] = ent_id
+        return sep
+
 
 
         # the batch got is actually a word pair
 
-    def qid2vecs(self, qid):
+    def slide_through(self, ind, window_size):
+        """
+        Sliding through one span, generate all pairs in it
+
+        Args:
+            ind  -  the index of the label entity
+            window_size  -  the window_size of context
+        Return:
+            the pair list
+        """
+        data = self.train_data
+
+
+
+    # TODO: what does the sen2vecs return len() mean.
+    def qid2vec(self, qid):
         """
         Given Qid, return the concatenated word vectors
 
@@ -95,8 +165,15 @@ class DataLoader():
             qvec  -  the vector of the question
         """
         question = self.qid2sen[qid]
-        qvec = self.sen2vecs(sentence=question)
-        return qvec
+        l, qvec = self.sen2vecs(sentence=question)
+        return l, qvec
+
+    def qids2vecs(self, qvec):
+        qvec = 
+        for i, qid in enumerate(qvec):
+
+
+
 
     def sen2vecs(self, sentence):
         """
