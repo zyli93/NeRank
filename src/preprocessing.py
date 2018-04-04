@@ -228,7 +228,7 @@ def extract_question_answer_user(data_dir, parsed_dir):
         IOError("Can NOT find {}".format(data_dir + INPUT))
 
     with open(data_dir + INPUT, "r") as fin, \
-            open(data_dir + OUTPUT_ACCEPT, "w") as fout_acc, \
+            open(parsed_dir + OUTPUT_ACCEPT, "w") as fout_acc, \
             open(parsed_dir + OUTPUT, "w") as fout:
         for line in fin:
             data = json.loads(line)
@@ -333,6 +333,59 @@ def extract_answer_score(data_dir, parsed_dir):
                              + str(data))
                 continue
 
+def extract_question_best_answerer(data_dir, parsed_dir):
+    """Extract the question-best-answerer relation
+
+    Args:
+        data_dir  - as usual
+        parsed_dir  -  as usual
+    """
+    INPUT_A = "Posts_A.json"
+    INPUT_MAP = "QAU_Map.json"
+    OUTPUT = "Q_ACC_A.txt"
+
+    if not os.path.exists(data_dir + INPUT_A):
+        IOError("Cannot find file {}".format(data_dir + INPUT_A))
+    if not os.path.exists(data_dir + INPUT_MAP):
+        IOError("Cannot find file {}".format(data_dir + INPUT_MAP))
+
+    accaid_uaid = {}  # Accepted answer id to Answering user id
+    aid_score = {}  # Answer id to answer scores
+    with open(data_dir + INPUT_A, "r") as fin_a, \
+        open(data_dir + INPUT_MAP, "r") as fin_map, \
+        open(parsed_dir + OUTPUT, "w") as fout:
+
+        # build acc-a dict
+        for line in fin_a:
+            data = json.loads(line)
+            try:
+                aid = data.get("Id")
+                score = data.get("Score")
+                uaid = data.get("OwnerUserId")
+                aid_score[aid] = score
+                accaid_uaid[aid] = uaid
+            except:
+                logging.info("Error at Extracting question, best answer user: "
+                             + str(data))
+
+        for line in fin_map:
+            data = json.loads(line)
+            try:
+                qid = data.get('QuestionId')
+                if "AcceptedAnswerID" in data:  # If acc answer exists
+                    acc_aid = data.get('AcceptedAnswerId')
+                else:  # If acc answer doesn't exist, choose highest score answer
+                    ans = data.get('AnswerOwnerList')
+                    ans = list(zip(*ans))[0]
+                    scores = [aid_score[aid] for aid in ans]
+                    max_ind = scores.index(max(scores))
+                    acc_aid = ans[max_ind]
+                uaccid = accaid_uaid[acc_aid]
+                print("{} {}".format(qid, uaccid), file=fout)
+            except:
+                logging.info("Error at Extracting question, best answer user: "
+                             + str(data))
+
 
 def preprocess(dataset):
     DATASET = dataset
@@ -394,6 +447,8 @@ def preprocess(dataset):
 
     # print("Extracting Answers' Scores ...")
     extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+
+    extract_question_best_answerer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     print("Done!")
 

@@ -14,4 +14,6 @@ PDER represents "Personalized Domain Expert Recommendation".
     - [ ] Construct `main.py`
     - [x] `generate_walk.py`
 
+- [ ] Verifying
+    - [ ] The preprocessing is correct
 

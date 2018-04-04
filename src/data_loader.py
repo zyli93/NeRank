@@ -5,8 +5,6 @@
 
     author: Zeyu Li <zyli@cs.ucla.edu> or <zeyuli@g.ucla.edu>
 
-    # TODO: how to subsampling, how to negtive sampling, that it
-
 """
 
 import numpy as np
@@ -22,7 +20,6 @@ class DataLoader():
         self.dataset = dataset
         self.mpfile = os.getcwd() + "/metapath/"+ self.dataset +".txt"
         self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
-        # self.vocab_size = vocab_size
 
         data = self.read_data()
         self.train_data = data
@@ -135,10 +132,6 @@ class DataLoader():
             sep[ent_type][index] = ent_id
         return sep
 
-
-
-        # the batch got is actually a word pair
-
     def slide_through(self, ind, window_size):
         """
         Sliding through one span, generate all pairs in it
@@ -149,11 +142,24 @@ class DataLoader():
         Return:
             the pair list
         """
-        data = self.train_data
+        meta_path = self.train_data[ind]
+        pairs = []
+        for pos, token in enumerate(meta_path):
+            lcontext, rcontext = [], []
+            lcontext = meta_path[pos - window_size: pos] \
+                if pos - window_size >= 0 \
+                else meta_path[:pos]
 
+            if pos + 1 < len(meta_path):
+                rcontext = meta_path[pos + 1 : pos + window_size] \
+                    if pos + window_size < len(meta_path) \
+                    else meta_path[pos + 1 :]
 
+            context_pairs = [[token, context]
+                             for context in lcontext + rcontext]
+            pairs += context_pairs
+        return pairs
 
-    # TODO: what does the sen2vecs return len() mean.
     def qid2vec(self, qid):
         """
         Given Qid, return the concatenated word vectors
@@ -167,13 +173,6 @@ class DataLoader():
         question = self.qid2sen[qid]
         l, qvec = self.sen2vecs(sentence=question)
         return l, qvec
-
-    def qids2vecs(self, qvec):
-        qvec = 
-        for i, qid in enumerate(qvec):
-
-
-
 
     def sen2vecs(self, sentence):
         """
@@ -231,8 +230,10 @@ class DataLoader():
 
         return qid2sen
 
+    # def
+
 
 if __name__ == "__main__":
-    test = DataLoader(vocab_size=1, dataset="3dprinting")
+    test = DataLoader(dataset="3dprinting")
     test.load_word2vec()
 

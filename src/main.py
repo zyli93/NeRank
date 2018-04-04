@@ -78,8 +78,12 @@ if __name__ == '__main__':
                       help="The window size of the meta-path model.")
     parser.add_option("-g", "--gen-metapaths", default=False,
                       dest="gen_mp", action="store_true",
-                      help="Decide whether to generate new metapaths")
+                      help="Decide whether to generate new metapaths.")
+    parser.add_option("-n", "--neg-ration", type="float",
+                      dest="neg_ration", default=1.2,
+                      help="The ratio of negative samples.")
+                      # TODO: what is a good neg sample ratio
+
 
     (options, args) = parser.parse_args()
-    print(1)
     runPDER(options)

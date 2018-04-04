@@ -50,6 +50,14 @@ class NeRank(nn.Module):
 
         dl = DataLoader(dataset="3dprinting")
 
+        # TODO: fill in the BiLSTM
+        self.birnn = nn.LSTM(input_size=input_size,
+                             hidden_size=hiddens_size,
+                             num_layers=num_layers,
+                             batch_first=True,
+                             bidirectional=True)
+        self.fc = nn.Linear(hidden_size * 2, num_)
+
 
 
 
@@ -72,6 +80,29 @@ class NeRank(nn.Module):
 
         embed_rv = self.rv_embeddings(rvpos)
         embed_av = self.av_embeddings(avpos)
+
+        embed_qu = # BiRNN TODO: fill in this
+        embed_qv = embed_qu # TODO: decide which to use as embed_qu
+
+        embed_u = embed_ru + embed_au + embed_qu
+        embed_v = embed_rv + embed_av + embed_qv
+
+        score = torch.mul(embed_u, embed_v)
+        score = torch.sum(score)
+
+        log_target = F.logsigmoid(score).squeeze()  # TODO: what is squeeze?
+
+        # TODO: add neg sample embeddings
+
+        # TODO: add ranking things
+
+
+
+
+
+
+
+
 
 
 
