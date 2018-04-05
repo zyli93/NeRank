@@ -203,7 +203,6 @@ class MetaPathGenerator:
 
         print("Done!")
 
-
 if __name__ == "__main__":
     gw = MetaPathGenerator(length=15, num_walks=2, dataset="3dprinting")
     walks = gw.generate_metapaths(patterns=["AQRQA", "AQA"], alpha=0)

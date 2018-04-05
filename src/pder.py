@@ -18,11 +18,12 @@ from data_loader import DataLoader
 import time
 
 class PDER:
-    def __init__(self, inputfile, vocab_size=1000000, embedding_dim=200,
-                 epoch_num=10, batch_size=16, window_size=5,
-                 neg_sample_num=10):
+    def __init__(self, dataset,
+                 vocab_size=1000000, embedding_dim=200,
+                 epoch_num=10, batch_size=16,
+                 window_size=5, neg_sample_num=10):
 
-        self.helper = DataLoader() # TODO: all params required
+        self.helper = DataLoader(dataset=dataset) # TODO: all params required
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size

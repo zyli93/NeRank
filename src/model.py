@@ -29,10 +29,14 @@ class NeRank(nn.Module):
             - [ ] Move the model to CUDA
         - [ ] Name
     """
-    def __init__(self, vocab_size, embedding_dim):
+    def __init__(self, embedding_dim, dataset):
         super(NeRank, self).__init__()
 
         # u and v of vector of R, we will use u in the end
+        dl = DataLoader(dataset=dataset)
+        # TODO: still debating which is better to pass in,
+        # TODO:     dl or dataset
+        vocab_size = dl.user_count
         self.ru_embeddings = nn.Embedding(vocab_size,
                                          embedding_dim,
                                          sparse=False)
@@ -48,7 +52,7 @@ class NeRank(nn.Module):
         self.embedding_dim = embedding_dim
         self.init_emb()
 
-        dl = DataLoader(dataset="3dprinting")
+        self.dl = dl  # TODO: adjust here. Get dl from outside
 
         # TODO: fill in the BiLSTM
         self.birnn = nn.LSTM(input_size=input_size,
@@ -73,6 +77,9 @@ class NeRank(nn.Module):
     def forward(self, upos, vpos, npos):
         rupos, qupos, aupos = upos[0], upos[1], upos[2]
         rvpos, qvpos, avpos = vpos[0], vpos[1], vpos[2]
+
+        # TODO: add uid2ind
+        # TODO: cannot do such transfer every time it trans
 
         # TODO: take care of the empty ones
         embed_ru = self.ru_embeddings(rupos)

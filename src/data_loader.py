@@ -28,7 +28,10 @@ class DataLoader():
         self.w2vmodel = self.load_word2vec()  # **Time Consuming!**
         self.qid2sen = self.load_questions()
 
-        self.process = True
+        self.uid2ind, self.ind2uid = {}, {}
+        self.user_count = self.create_uid_index()
+
+        self.process = True  # TODO: process manufacturing
 
         print("Done!")
 
@@ -160,7 +163,7 @@ class DataLoader():
             pairs += context_pairs
         return pairs
 
-    def qid2vec(self, qid):
+    def qid2vecs(self, qid):
         """
         Given Qid, return the concatenated word vectors
 
@@ -168,14 +171,16 @@ class DataLoader():
             qid  -  the qid
 
         Return:
-            qvec  -  the vector of the question
+            qvec  -  the vector of the question, numpy.ndarray
         """
         question = self.qid2sen[qid]
-        l, qvec = self.sen2vecs(sentence=question)
-        return l, qvec
+        qvecs = self.w2vmodel[question.strip().split(" ")]
+        # l, qvec = self.sen2vecs(sentence=question)
+        return qvecs
 
     def sen2vecs(self, sentence):
         """
+        ** [NOT in USE] **
         Convert sentence to concatenate of word-vectors
 
         Arg:
@@ -220,17 +225,39 @@ class DataLoader():
             lines = fin_t.readlines()
             for line in lines:
                 id, title = line.split(" ", 1)
-                qid2sen[id] = title
+                qid2sen[id] = title.strip()
 
         with open(qcfile, "r") as fin_c:
             lines = fin_c.readlines()
             for line in lines:
                 id, content = line.split(" ", 1)
-                qid2sen[id] += " " + content
+                qid2sen[id] += " " + content.strip()
 
         return qid2sen
 
-    # def
+    def create_uid_index(self):
+        """
+        Create a uid-index map and index-uid map
+
+        Return:
+            uid2ind  -  User id to Index dictionary
+            ind2uid  -  Index to User id dictionary
+            len(lines)  -  How many users are there in the network
+        """
+        uid_file = self.datadir + "part_users.txt"
+        with open(uid_file, "r") as fin:
+            lines = fin.readlines()
+            for ind, line in enumerate(lines):
+                uid = int(line.strip())
+                self.uid2ind[uid] = ind
+                self.ind2uid[ind] = uid
+            return len(lines)
+
+    def uid2index(self, uid):
+        return self.uid2ind[uid]
+
+    def index2uid(self, index):
+        return self.ind2uid[index]
 
 
 if __name__ == "__main__":

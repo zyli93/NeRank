@@ -24,6 +24,9 @@ try:
 except:
     import json
 
+part_user = set()
+    # Users participated in Asking and Answering
+
 def clean_html(x):
     return BeautifulSoup(x, 'lxml').get_text()
 
@@ -197,6 +200,7 @@ def extract_question_user(data_dir, parsed_dir):
                 data = json.loads(line)
                 qid = data['QuestionId']
                 owner_id = data['QuestionOwnerId']
+                part_user.add(int(qid))  # Adding participated questioners
                 print("{} {}".format(str(qid), str(owner_id)), file=fout)
 
 
@@ -236,6 +240,7 @@ def extract_question_answer_user(data_dir, parsed_dir):
             au_list = data['AnswerOwnerList']
             acid = data['AcceptedAnswerId']
             for aid, ans_owner_id in au_list:
+                part_user.add(int(aid))
                 print("{} {}".format(str(qid), str(ans_owner_id)),
                       file=fout)
             print("{} {}".format(str(qid), str(acid)),
@@ -333,6 +338,7 @@ def extract_answer_score(data_dir, parsed_dir):
                              + str(data))
                 continue
 
+
 def extract_question_best_answerer(data_dir, parsed_dir):
     """Extract the question-best-answerer relation
 
@@ -385,6 +391,15 @@ def extract_question_best_answerer(data_dir, parsed_dir):
             except:
                 logging.info("Error at Extracting question, best answer user: "
                              + str(data))
+
+
+def write_part_users(parsed_dir):
+    OUTPUT = "part_users.txt"
+    with open(parsed_dir + OUTPUT, "w") as fout:
+        idlist = list(part_user)
+        idlist.sort()
+        for user_id in idlist:
+            print("{}".format(user_id), file=fout)
 
 
 def preprocess(dataset):
@@ -449,6 +464,8 @@ def preprocess(dataset):
     extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     extract_question_best_answerer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+
+    write_part_users(parsed_dir=PARSED_DIR)
 
     print("Done!")
 
