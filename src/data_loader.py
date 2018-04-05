@@ -21,21 +21,21 @@ class DataLoader():
         self.mpfile = os.getcwd() + "/metapath/"+ self.dataset +".txt"
         self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
 
-        data = self.read_data()
+        data = self.__read_data()
         self.train_data = data
-        self.count = self.count_dataset(data)
-        self.sample_table = self.init_sample_table()
-        self.w2vmodel = self.load_word2vec()  # **Time Consuming!**
-        self.qid2sen = self.load_questions()
+        self.count = self.__count_dataset(data)
+        self.sample_table = self.__init_sample_table()
+        self.w2vmodel = self.__load_word2vec()  # **Time Consuming!**
+        self.qid2sen = self.__load_questions()
 
         self.uid2ind, self.ind2uid = {}, {}
-        self.user_count = self.create_uid_index()
+        self.user_count = self.__create_uid_index()
 
         self.process = True  # TODO: process manufacturing
 
         print("Done!")
 
-    def read_data(self):
+    def __read_data(self):
         """
         Read metapath dataset,
             load the dataset into data
@@ -48,7 +48,7 @@ class DataLoader():
             data = [line.strip().split(" ") for line in lines]
             return data
 
-    def count_dataset(self, data):
+    def __count_dataset(self, data):
         """
         Read dataset and count the frequency
 
@@ -67,7 +67,7 @@ class DataLoader():
         count.sort(key=lambda x:x[1], reverse=True)
         return count
 
-    def init_sample_table(self):
+    def __init_sample_table(self):
         """
         Create sample tables by P()^(3/4)
 
@@ -94,7 +94,7 @@ class DataLoader():
             else len(data) - data_index
 
         for i in range(batch):
-            pairs = self.slide_through(data_index, window_size)
+            pairs = self.__slide_through(data_index, window_size)
             if data_index + 1 < len(data):
                 data_index += 1
             else:  # Meet the end of the dataset
@@ -103,18 +103,18 @@ class DataLoader():
             pairs_list += pairs
 
         u, v = zip(*pairs_list)
-        upos = self.separate_entity(u)
-        vpos = self.separate_entity(v)
+        upos = self.__separate_entity(u)
+        vpos = self.__separate_entity(v)
 
         batch_pair_count = len(pairs_list)
         neg_samples = np.random.choice(self.sample_table,
                                        size=(batch_pair_count * 2 * window_size,
                                              batch_pair_count * neg_ratio))
         # TODO: check the size of neg_samples
-        npos = self.separate_entity(neg_samples)
+        npos = self.__separate_entity(neg_samples)
         return upos, vpos, npos
 
-    def separate_entity(self, items):
+    def __separate_entity(self, items):
         """
         Change a list from "A_1 Q_2 R_1 Q_2" to three vectors
             A: 1 0 0 0
@@ -135,7 +135,7 @@ class DataLoader():
             sep[ent_type][index] = ent_id
         return sep
 
-    def slide_through(self, ind, window_size):
+    def __slide_through(self, ind, window_size):
         """
         Sliding through one span, generate all pairs in it
 
@@ -193,7 +193,7 @@ class DataLoader():
         vectors = [self.w2vmodel[w] for w in sentence]
         return len(sentence), np.array(vectors)
 
-    def load_word2vec(self):
+    def __load_word2vec(self):
         """
         Loading word2vec model, return the model
 
@@ -207,7 +207,7 @@ class DataLoader():
             fname=PATH, binary=True)
         return model
 
-    def load_questions(self):
+    def __load_questions(self):
         """
         Load question from dataset, "title" + "content",
             construct the qid2sen dictionary
@@ -235,7 +235,7 @@ class DataLoader():
 
         return qid2sen
 
-    def create_uid_index(self):
+    def __create_uid_index(self):
         """
         Create a uid-index map and index-uid map
 
@@ -245,6 +245,8 @@ class DataLoader():
             len(lines)  -  How many users are there in the network
         """
         uid_file = self.datadir + "part_users.txt"
+        self.uid2ind[0] = 0
+        self.ind2uid[0] = 0
         with open(uid_file, "r") as fin:
             lines = fin.readlines()
             for ind, line in enumerate(lines):
@@ -253,14 +255,38 @@ class DataLoader():
                 self.ind2uid[ind] = uid
             return len(lines)
 
-    def uid2index(self, uid):
+    def single_uid2index(self, uid):
         return self.uid2ind[uid]
 
-    def index2uid(self, index):
+    def single_index2uid(self, index):
         return self.ind2uid[index]
+
+    def uid2index(self, vec):
+        """
+        User ID representation to user Index representation
+
+        Args:
+            vec  -  the np.array to work with
+        Return:
+            the transformed numpy array
+        """
+        vfunc = np.vectorize(lambda x:self.uid2ind[x])
+        return vfunc(vec)
+
+    def index2uid(self, vec):
+        """
+        User Index representation to user ID representation
+
+        Args:
+            vec  -  the np.array to work with
+        Return:
+            the transformed numpy array
+        """
+        vfunc = np.vectorize(lambda x:self.ind2uid[x])
+        return vfunc(vec)
 
 
 if __name__ == "__main__":
     test = DataLoader(dataset="3dprinting")
-    test.load_word2vec()
+    test.__load_word2vec()
 
