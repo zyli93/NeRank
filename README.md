@@ -17,3 +17,9 @@ PDER represents "Personalized Domain Expert Recommendation".
 - [ ] Verifying
     - [ ] The preprocessing is correct
 
+- [ ] Preprocessing data
+    - [ ] Word2Vec cannot take punctuations
+
+- [ ] Users participant
+    - [ ] Now only considering users who participated in discussion
+

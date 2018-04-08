@@ -86,7 +86,7 @@ class NeRank(nn.Module):
         # TODO: came up with better way to get shape
 
         """
-        === Network Embedding Part ===
+                === Network Embedding Part ===
         """
         # uid representation to user index representation
         rupos, rvpos = dl.uid2index(rupos), dl.uid2index(rvpos)
@@ -105,7 +105,9 @@ class NeRank(nn.Module):
         embed_qu = torch.LongTensor(self.embedding_dim, batch_size).zero_()
         for i, qid in enumerate(qupos):
             if qid:
+                # TODO: replace this with matrices representation of sentences
                 x = torch.LongTensor(dl.qid2vecs(qid))
+                    # TODO: take a look at this problem
                 # TODO: check correctness, whether to add view() or squeeze()?
                 embed_qu[i] = self.birnn(x, self.hidden)  # TODO: what is hidden?
 
@@ -117,21 +119,41 @@ class NeRank(nn.Module):
         score = torch.mul(embed_u, embed_v)
         score = torch.sum(score)
 
-        log_target = F.logsigmoid(score).squeeze()  # TODO: what is squeeze?
+        log_target = F.logsigmoid(score).squeeze()
 
-        # TODO: add neg sample embeddings
         neg_batch_size = rnpos.shape[0]
         neg_embed_rv = self.rv_embeddings(rnpos)
         neg_embed_av = self.av_embeddings(anpos)
-        neg_embed_qv = torch.LongTensor(self.embedding_dim, neg_batch_size).zero_()
+        neg_embed_qv = torch.LongTensor(self.embedding_dim,
+                                        neg_batch_size).zero_()
         for i, qid in enumerate(qnpos):
             if qid:
                 x = torch.LongTensor(dl.qid2vecs(qid))
                 neg_embed_qv[i] = self.birnn(x, self.hidden)
 
         neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv
+        """
+        Some notes around here.
+        * unsqueeze(): add 1 dim in certain position
+        * squeeze():   remove all 1 dims. E.g. (4x1x2x4x1) -> (4x2x4)
+        * Explain the dimension:
+            bmm: batch matrix-matrix product.
+                batch1 - b x n x m
+                batch2 - b x m x p
+                return - b x n x p
+            Here:
+                neg_embed_v - 2*batch_size*window_size x count x emb_dim
+                embed_u     - 2*batch_size*window_size x emb_dim
+                embed_u.unsqueeze(2)
+                            - 2*batch_size*window_size x emb_dim x 1
+                bmm(.,.)    - 2*batch_size*window_size x count x 1
+                bmm(.,.).squeeze()
+                            - 2*batch_size*window_size x count
+        * Input & Output of nn.Embeddings:
+            In : LongTensor(N,M)
+            Out: (N, W, embedding_dim)
+        """
         neg_score = torch.bmm(neg_embed_v, embed_u.unsqueeze(2)).squeeze()
-        # TODO: why here unsqueeze and squeeze?
         neg_score = torch.sum(neg_score)
         sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
@@ -139,6 +161,14 @@ class NeRank(nn.Module):
 
 
 
+
+
         # TODO: add ranking things
+        """
+            === Learning to Rank Part ===
+        """
+        # TODO:
+        #
+
 
 

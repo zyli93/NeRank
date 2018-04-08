@@ -86,6 +86,21 @@ class DataLoader():
         return np.array(sample_table)
 
     def generate_batch(self, window_size, batch_size, neg_ratio):
+        """
+        Get batch from the meta paths for the training of skip-gram
+            model.
+
+        Args:
+            window_size  -  the size of sliding window. In following case,
+                            the window size is 2. "_ _ [ ] _ _"
+            batch_size   -  how many meta-paths compose a batch
+            neg_ratio    -  the ratio of negative samples w.r.t.
+                            the positive samples
+        Return:
+            upos         -  the u vector positions (1D Tensor)
+            vpos         -  the v vector positions (1D Tensor)
+            npos         -  the negative samples positions (2D Tensor)
+        """
         data = self.train_data
         global data_index
         pairs_list = []
@@ -106,10 +121,10 @@ class DataLoader():
         upos = self.__separate_entity(u)
         vpos = self.__separate_entity(v)
 
-        batch_pair_count = len(pairs_list)
+        npairs_in_batch = len(pairs_list)
         neg_samples = np.random.choice(self.sample_table,
-                                       size=(batch_pair_count * 2 * window_size,
-                                             batch_pair_count * neg_ratio))
+                                       size=(npairs_in_batch * 2 * window_size,
+                                             npairs_in_batch * neg_ratio))
         # TODO: check the size of neg_samples
         npos = self.__separate_entity(neg_samples)
         return upos, vpos, npos
