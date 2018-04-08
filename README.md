@@ -23,3 +23,7 @@ PDER represents "Personalized Domain Expert Recommendation".
 - [ ] Users participant
     - [ ] Now only considering users who participated in discussion
 
+- [ ] The transfer from User ID to real index.
+    - [ ] This can be done earlier.
+          For example, as early as when generating the metapaths
+

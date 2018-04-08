@@ -62,7 +62,6 @@ class NeRank(nn.Module):
 
 
 
-
     def init_emb(self):
         """Initialize R and A embeddings"""
         initrange = 0.5 / self.embedding_dim
@@ -72,29 +71,28 @@ class NeRank(nn.Module):
         self.av_embeddings.weight.data.uniform_(-0, 0)
 
 
-    def forward(self, upos, vpos, npos):
+    def forward(self, upos, vpos, npos, batch_size):
         # TODO: it is very likely that later on we will move the
         # TODO:     transformation to outer structure.
 
         dl = self.dl
 
-        rupos, qupos, aupos = upos[0], upos[1], upos[2]
-        rvpos, qvpos, avpos = vpos[0], vpos[1], vpos[2]
-        rnpos, qnpos, anpos = npos[0], npos[1], npos[2]
-
-        batch_size = rupos.shape[0]
-        # TODO: came up with better way to get shape
-
         """
                 === Network Embedding Part ===
         """
-        # uid representation to user index representation
-        rupos, rvpos = dl.uid2index(rupos), dl.uid2index(rvpos)
-        aupos, avpos = dl.uid2index(aupos), dl.uid2index(avpos)
-        rnpos, anpos = dl.uid2index(rnpos), dl.uid2index(anpos)
-        # TODO: cannot do such transfer every time it trans
 
-        # TODO: take care of the empty ones
+        # UID representation to user index representation
+        rupos, rvpos, rnpos = dl.uid2index(upos[0]), \
+                              dl.uid2index(vpos[0]), \
+                              dl.uid2index(npos[0])
+        aupos, avpos, anpos = dl.uid2index(upos[1]), \
+                              dl.uid2index(vpos[1]), \
+                              dl.uid2index(npos[1])
+        # qupos, qvpos = dl.uid2index(upos[2]), dl.uid2index(vpos[2])
+
+        # TODO: take care of q-id's
+
+        # TODO: take care of the empty ones by assigning 0 to be vec(0)
         embed_ru = self.ru_embeddings(rupos)
         embed_au = self.au_embeddings(aupos)
 

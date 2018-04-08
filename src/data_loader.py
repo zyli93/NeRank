@@ -122,14 +122,20 @@ class DataLoader():
         vpos = self.__separate_entity(v)
 
         npairs_in_batch = len(pairs_list)
-        neg_samples = np.random.choice(self.sample_table,
-                                       size=(npairs_in_batch * 2 * window_size,
-                                             npairs_in_batch * neg_ratio))
-        # TODO: check the size of neg_samples
-        npos = self.__separate_entity(neg_samples)
+        neg_samples = np.random.choice(
+            self.sample_table,
+            # First get a long neg sample list
+            # Then after separating entity, reshape to 3xLxH
+            size=(npairs_in_batch * 2 * window_size
+                  * int(npairs_in_batch * neg_ratio)))
+
+        npos = self.__separate_entity(neg_samples).reshape(
+            3,  # RAQ for 3 sub-matrices
+            npairs_in_batch * 2 * window_size,
+            int(npairs_in_batch * neg_ratio))
         return upos, vpos, npos
 
-    def __separate_entity(self, items):
+    def __separate_entity(self, entity_seq):
         """
         Change a list from "A_1 Q_2 R_1 Q_2" to three vectors
             A: 1 0 0 0
@@ -137,14 +143,14 @@ class DataLoader():
             R: 0 0 1 0
 
         Args:
-            items  -  the list of items
+            entity_seq  -  the sequence of entities, type=np.array[(str)]
 
         Return:
             three dimensional matrix representing above matrix
         """
-        D = {"A":0, "Q":1, "R":2}
-        sep = np.zeros(shape=(3, len(items)))
-        for index, item in enumerate(items):
+        D = {"A": 1, "Q": 2, "R": 0}
+        sep = np.zeros(shape=(3, len(entity_seq)))
+        for index, item in enumerate(entity_seq):
             split = item.split("_")
             ent_type, ent_id = D[split[0]], int(split[1])
             sep[ent_type][index] = ent_id
@@ -285,7 +291,7 @@ class DataLoader():
         Return:
             the transformed numpy array
         """
-        vfunc = np.vectorize(lambda x:self.uid2ind[x])
+        vfunc = np.vectorize(lambda x: self.uid2ind[x])
         return vfunc(vec)
 
     def index2uid(self, vec):
@@ -297,7 +303,7 @@ class DataLoader():
         Return:
             the transformed numpy array
         """
-        vfunc = np.vectorize(lambda x:self.ind2uid[x])
+        vfunc = np.vectorize(lambda x: self.ind2uid[x])
         return vfunc(vec)
 
 
