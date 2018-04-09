@@ -1,6 +1,7 @@
 from generate_walk import MetaPathGenerator
 from preprocessing import preprocess
 from data_loader import DataLoader
+from pder import PDER
 
 import os, sys
 from optparse import OptionParser
@@ -17,7 +18,6 @@ def runPDER(options):
     if options.preprocess:
         preprocess(options.dataset)
 
-
     # preprocessing
     if options.gen_mp:
         mp_generator = MetaPathGenerator(
@@ -30,8 +30,10 @@ def runPDER(options):
         mp_generator.write_metapaths(walks)
 
     # init data_loader
-    print(2)
-    # dl = DataLoader(vocab_size=1, dataset=options.dataset)
+    pder_model = PDER(
+        # TODO: fill in the params
+    )
+
 
 
 

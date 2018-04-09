@@ -66,14 +66,17 @@ class NeRank(nn.Module):
         """Initialize R and A embeddings"""
         initrange = 0.5 / self.embedding_dim
         self.ru_embeddings.weight.data.uniform_(-initrange, initrange)
+        self.ru_embeddings.weight.data[0].zero_()
         self.rv_embeddings.weight.data.uniform_(-0, 0)
         self.au_embeddings.weight.data.uniform_(-initrange, initrange)
+        self.ru_embeddings.weight.data[0].zero_()
         self.av_embeddings.weight.data.uniform_(-0, 0)
 
 
-    def forward(self, upos, vpos, npos, batch_size):
-        # TODO: it is very likely that later on we will move the
-        # TODO:     transformation to outer structure.
+    # def forward(self, upos, vpos, npos, batch_size):
+    def forward(self, rupos, rvpos, rnpos,
+                      aupos, avpos, anpos,
+                      qupos, qvpos, qnpos):  # TODO: can we shrink the param size?
 
         dl = self.dl
 
@@ -82,12 +85,12 @@ class NeRank(nn.Module):
         """
 
         # UID representation to user index representation
-        rupos, rvpos, rnpos = dl.uid2index(upos[0]), \
-                              dl.uid2index(vpos[0]), \
-                              dl.uid2index(npos[0])
-        aupos, avpos, anpos = dl.uid2index(upos[1]), \
-                              dl.uid2index(vpos[1]), \
-                              dl.uid2index(npos[1])
+        # rupos, rvpos, rnpos = dl.uid2index(upos[0]), \
+        #                       dl.uid2index(vpos[0]), \
+        #                       dl.uid2index(npos[0])
+        # aupos, avpos, anpos = dl.uid2index(upos[1]), \
+        #                       dl.uid2index(vpos[1]), \
+        #                       dl.uid2index(npos[1])
         # qupos, qvpos = dl.uid2index(upos[2]), dl.uid2index(vpos[2])
 
         # TODO: take care of q-id's
