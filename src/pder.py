@@ -51,7 +51,6 @@ class PDER:
 
             while dl.process:
                 # TODO: Here comes the get data and preprocessing
-                # TODO: Implement generate_batch
                 # TODO: what's in the batch
                 upos, vpos, npos = dl.generate_batch(
                     window_size=self.window_size,
@@ -59,8 +58,6 @@ class PDER:
                     neg_ratio=self.neg_sample_ration)
 
                 # UID representation to user index representation
-                # TODO: npos don't apply because of the dimension
-                # TODO: Seems that diag doesn't work with 2+ dim matrices
                 rupos, rvpos, rnpos = dl.uid2index(upos[0]), \
                                       dl.uid2index(vpos[0]), \
                                       dl.uid2index(npos[0])
@@ -68,6 +65,7 @@ class PDER:
                                       dl.uid2index(vpos[1]), \
                                       dl.uid2index(npos[1])
                 qupos, qvpos, qnpos = upos[2], vpos[2], npos[2]
+
                 """
                 In order to totally vectorize the computation, we use following method.
                 qupos, qvpos, qnpos are the positions and ids of the text.
@@ -75,10 +73,6 @@ class PDER:
                     (qvpos, qnpos) is not zero.
                 We use dot product to zero out those undesired columns.
                 """
-                qudiag, qvdiag, qndiag = [np.diag(np.where(loc > 0, 1, 0))
-                                          for loc in [qupos, qvpos, qnpos]]  # TODO: fix qnpos
-
-                # qupos, qvpos = dl.uid2index(upos[2]), dl.uid2index(vpos[2])
 
 
                 # Create the Variables, only Variables with LongTensor can be
@@ -92,17 +86,20 @@ class PDER:
                 aupos = Variable(torch.LongTensor(aupos))
                 avpos = Variable(torch.LongTensor(avpos))
 
-                # Q ???
-
                 # Negative Samples of R and A
                 rnpos = Variable(torch.LongTensor(rnpos))
                 anpos = Variable(torch.LongTensor(anpos))
 
+                # Q
+                quloc = Variable(torch.LongTensor(np.where(qupos > 0, 1, 0)))
+                qvloc = Variable(torch.LongTensor(np.where(qvpos > 0, 1, 0)))
+                qnloc = Variable(torch.LongTensor(np.where(qnpos > 0, 1, 0)))
 
-                variables = [
-                    rupos, rvpos, rnpos,
-                    aupos, avpos, anpos
-                ]
+                quemb = Variable(torch.LongTensor(dl.qid2vec(qupos)))
+                qvemb = Variable(torch.LongTensor(dl.qid2vec(qvpos)))
+                qnemb = Variable(torch.LongTensor(dl.qid2vec(qnpos)))
+
+
 
                 if torch.cuda.is_available():
                     rupos = rupos.cuda()
@@ -111,12 +108,20 @@ class PDER:
                     aupos = aupos.cuda()
                     avpos = avpos.cuda()
                     anpos = anpos.cuda()
-                    # TODO: fill in Q
+                    quloc = quloc.cuda()
+                    qvloc = qvloc.cuda()
+                    qnloc = qnloc.cuda()
+                    quemb = quemb.cuda()
+                    qvemb = qvemb.cuda()
+                    qnemb = qnemb.cuda()
 
 
                 optimizer.zero_grad()
 
-                loss = model(upos, vpos, npos, )
+                loss = model(rupos, rvpos, rnpos,
+                             aupos, avpos, anpos,
+                             quloc, qvloc, qnloc,
+                             quemb, qvemb, qnemb)  # TODO: fill in this
 
                 optimizer.step()
 

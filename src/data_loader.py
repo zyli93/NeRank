@@ -129,10 +129,14 @@ class DataLoader():
             size=(npairs_in_batch * 2 * window_size
                   * int(npairs_in_batch * neg_ratio)))
 
-        npos = self.__separate_entity(neg_samples).reshape(
-            3,  # RAQ for 3 sub-matrices
-            npairs_in_batch * 2 * window_size,
-            int(npairs_in_batch * neg_ratio))
+        # WHY:
+        #   Instead of returning a mat, here it return a long np.array.
+        #   In the model, it reshape.
+        # npos = self.__separate_entity(neg_samples).reshape(
+        #     3,  # RAQ for 3 sub-matrices
+        #     npairs_in_batch * 2 * window_size,
+        #     int(npairs_in_batch * neg_ratio))
+        npos = self.__separate_entity(neg_samples)
         return upos, vpos, npos
 
     def __separate_entity(self, entity_seq):
@@ -184,7 +188,7 @@ class DataLoader():
             pairs += context_pairs
         return pairs
 
-    def qid2vecs(self, qid):
+    def __qid_to_concatenate_emb(self, qid):
         """
         Given Qid, return the concatenated word vectors
 
@@ -196,8 +200,21 @@ class DataLoader():
         """
         question = self.qid2sen[qid]
         qvecs = self.w2vmodel[question.strip().split(" ")]
-        # l, qvec = self.sen2vecs(sentence=question)
         return qvecs
+
+    def qid2vec(self, vec):
+        """
+        Vector qid to a vector of concatenated word embeddings
+
+        Args:
+            vec  -  the vector of qids to deal with
+
+        Return:
+            the list of concatenated word embeddings.
+            Each element should be variant in sizes.
+        """
+        vfunc = np.vectorize(lambda x: self.__qid_to_concatenate_emb(x))
+        return vfunc(vec)
 
     def sen2vecs(self, sentence):
         """
@@ -277,9 +294,11 @@ class DataLoader():
             return len(lines)
 
     def single_uid2index(self, uid):
+        """ NOT IN USE"""
         return self.uid2ind[uid]
 
     def single_index2uid(self, index):
+        """NOT IN USE"""
         return self.ind2uid[index]
 
     def uid2index(self, vec):

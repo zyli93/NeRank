@@ -34,7 +34,6 @@ class NeRank(nn.Module):
 
         # u and v of vector of R, we will use u in the end
         self.dl = DataLoader(dataset=dataset)
-        # TODO: still debating which is better to pass in, dl or dataset
         vocab_size = self.dl.user_count
         self.ru_embeddings = nn.Embedding(vocab_size,
                                          embedding_dim,
@@ -73,10 +72,16 @@ class NeRank(nn.Module):
         self.av_embeddings.weight.data.uniform_(-0, 0)
 
 
-    # def forward(self, upos, vpos, npos, batch_size):
     def forward(self, rupos, rvpos, rnpos,
                       aupos, avpos, anpos,
-                      qupos, qvpos, qnpos):  # TODO: can we shrink the param size?
+                      quloc, qvloc, qnloc,
+                      quemb, qvemb, qnemb):
+        """
+        forward algorithm for NeRank,
+        quloc, qvloc, qnloc are locations in a vector of u, v,
+            and negative samples where there is a question text.
+        quemb, qvemb, qnemb are the word embedding piles of that
+        """
 
         dl = self.dl
 
@@ -84,35 +89,23 @@ class NeRank(nn.Module):
                 === Network Embedding Part ===
         """
 
-        # UID representation to user index representation
-        # rupos, rvpos, rnpos = dl.uid2index(upos[0]), \
-        #                       dl.uid2index(vpos[0]), \
-        #                       dl.uid2index(npos[0])
-        # aupos, avpos, anpos = dl.uid2index(upos[1]), \
-        #                       dl.uid2index(vpos[1]), \
-        #                       dl.uid2index(npos[1])
-        # qupos, qvpos = dl.uid2index(upos[2]), dl.uid2index(vpos[2])
-
-        # TODO: take care of q-id's
-
-        # TODO: take care of the empty ones by assigning 0 to be vec(0)
         embed_ru = self.ru_embeddings(rupos)
         embed_au = self.au_embeddings(aupos)
 
         embed_rv = self.rv_embeddings(rvpos)
         embed_av = self.av_embeddings(avpos)
 
-        # Specifically handle the text
-        embed_qu = torch.LongTensor(self.embedding_dim, batch_size).zero_()
-        for i, qid in enumerate(qupos):
-            if qid:
-                # TODO: replace this with matrices representation of sentences
-                x = torch.LongTensor(dl.qid2vecs(qid))
-                    # TODO: take a look at this problem
-                # TODO: check correctness, whether to add view() or squeeze()?
-                embed_qu[i] = self.birnn(x, self.hidden)  # TODO: what is hidden?
 
-        embed_qv = embed_qu # TODO: decide which to use as embed_qu
+        # quemb here is just the concatenation of word vectors
+        # after this step, everything is equal length
+        embed_qu = self.birnn(quemb)  # TODO: the input format of BiLSTM
+        embed_qv = self.birnn(qvemb)
+        embed_qn = self.birnn(qnemb)
+
+        embed_qu = torch.
+
+
+        #=================================================
 
         embed_u = embed_ru + embed_au + embed_qu
         embed_v = embed_rv + embed_av + embed_qv
