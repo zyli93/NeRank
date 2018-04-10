@@ -137,7 +137,7 @@ class DataLoader():
         #     npairs_in_batch * 2 * window_size,
         #     int(npairs_in_batch * neg_ratio))
         npos = self.__separate_entity(neg_samples)
-        return upos, vpos, npos
+        return upos, vpos, npos, npairs_in_batch
 
     def __separate_entity(self, entity_seq):
         """

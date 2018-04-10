@@ -52,7 +52,7 @@ class PDER:
             while dl.process:
                 # TODO: Here comes the get data and preprocessing
                 # TODO: what's in the batch
-                upos, vpos, npos = dl.generate_batch(
+                upos, vpos, npos, nsample = dl.generate_batch(
                     window_size=self.window_size,
                     batch_size=self.batch_size,
                     neg_ratio=self.neg_sample_ration)
@@ -121,7 +121,8 @@ class PDER:
                 loss = model(rupos, rvpos, rnpos,
                              aupos, avpos, anpos,
                              quloc, qvloc, qnloc,
-                             quemb, qvemb, qnemb)  # TODO: fill in this
+                             quemb, qvemb, qnemb,
+                             nsample)  # TODO: fill in this
 
                 optimizer.step()
 

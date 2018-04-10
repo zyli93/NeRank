@@ -35,6 +35,7 @@ class NeRank(nn.Module):
         # u and v of vector of R, we will use u in the end
         self.dl = DataLoader(dataset=dataset)
         vocab_size = self.dl.user_count
+        self.emb_dim = embedding_dim
         self.ru_embeddings = nn.Embedding(vocab_size,
                                          embedding_dim,
                                          sparse=False)
@@ -52,12 +53,18 @@ class NeRank(nn.Module):
 
 
         # TODO: fill in the BiLSTM
-        self.birnn = nn.LSTM(input_size=input_size,
+        self.ubirnn = nn.LSTM(input_size=input_size,
                              hidden_size=hiddens_size,
                              num_layers=num_layers,
                              batch_first=True,
                              bidirectional=True)
-        self.fc = nn.Linear(hidden_size * 2, num_)
+        self.vbirnn = nn.LSTM(input_size=input_size,
+                              hidden_size=hidden_size,
+                              num_layers=number_layers,
+                              batch_first=True,
+                              bidirectional=True)
+        # TODO: anyone tell me what is this?
+        # self.fc = nn.Linear(hidden_size * 2, num)
 
 
 
@@ -75,7 +82,8 @@ class NeRank(nn.Module):
     def forward(self, rupos, rvpos, rnpos,
                       aupos, avpos, anpos,
                       quloc, qvloc, qnloc,
-                      quemb, qvemb, qnemb):
+                      quemb, qvemb, qnemb,
+                      nsample):
         """
         forward algorithm for NeRank,
         quloc, qvloc, qnloc are locations in a vector of u, v,
@@ -88,24 +96,16 @@ class NeRank(nn.Module):
         """
                 === Network Embedding Part ===
         """
-
         embed_ru = self.ru_embeddings(rupos)
         embed_au = self.au_embeddings(aupos)
-
         embed_rv = self.rv_embeddings(rvpos)
         embed_av = self.av_embeddings(avpos)
 
-
         # quemb here is just the concatenation of word vectors
-        # after this step, everything is equal length
-        embed_qu = self.birnn(quemb)  # TODO: the input format of BiLSTM
-        embed_qv = self.birnn(qvemb)
-        embed_qn = self.birnn(qnemb)
+        #   after this step, everything is equal length
 
-        embed_qu = torch.
-
-
-        #=================================================
+        embed_qu = torch.matmul(torch.diag(quloc), self.ubirnn(quemb))
+        embed_qv = torch.matmul(torch.diag(qvloc), self.vbirnn(qvemb))
 
         embed_u = embed_ru + embed_au + embed_qu
         embed_v = embed_rv + embed_av + embed_qv
@@ -115,17 +115,13 @@ class NeRank(nn.Module):
 
         log_target = F.logsigmoid(score).squeeze()
 
-        neg_batch_size = rnpos.shape[0]
         neg_embed_rv = self.rv_embeddings(rnpos)
         neg_embed_av = self.av_embeddings(anpos)
-        neg_embed_qv = torch.LongTensor(self.embedding_dim,
-                                        neg_batch_size).zero_()
-        for i, qid in enumerate(qnpos):
-            if qid:
-                x = torch.LongTensor(dl.qid2vecs(qid))
-                neg_embed_qv[i] = self.birnn(x, self.hidden)
+        neg_embed_qv = torch.matmul(torch.diag(qnloc), self.vbirnn(qnemb))
 
         neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv
+        neg_embed_v = neg_embed_v.view(nsample, self.emb_dim, -1)
+
         """
         Some notes around here.
         * unsqueeze(): add 1 dim in certain position
@@ -152,9 +148,6 @@ class NeRank(nn.Module):
         sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
         loss = log_target + sum_log_sampled
-
-
-
 
 
         # TODO: add ranking things
