@@ -150,7 +150,6 @@ class NeRank(nn.Module):
         loss = log_target + sum_log_sampled
 
 
-        # TODO: add ranking things
         """
             === Learning to Rank Part ===
         """
@@ -160,6 +159,17 @@ class NeRank(nn.Module):
         emb_rank_a = self.au_embeddings(rank_a)
         emb_rank_r = self.ru_embeddings(rank_r)
         emb_rank_q = self.ubirnn(rank_q_emb)
+
+        low_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a],
+                                   dim=2)
+        high_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_acc],
+                                    dim=2)
+
+
+
+
+
+
 
 
 
