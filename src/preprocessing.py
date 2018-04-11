@@ -371,8 +371,9 @@ def extract_question_best_answerer(data_dir, parsed_dir):
                 aid_score[aid] = score
                 accaid_uaid[aid] = uaid
             except:
-                logging.info("Error at Extracting question, best answer user: "
-                             + str(data))
+                logging.info(
+                    "Error at Extracting question, best answer user: "
+                    + str(data))
 
         for line in fin_map:
             data = json.loads(line)
@@ -380,7 +381,8 @@ def extract_question_best_answerer(data_dir, parsed_dir):
                 qid = data.get('QuestionId')
                 if "AcceptedAnswerID" in data:  # If acc answer exists
                     acc_aid = data.get('AcceptedAnswerId')
-                else:  # If acc answer doesn't exist, choose highest score answer
+                else:
+                # If acc answer doesn't exist, choose highest score answer
                     ans = data.get('AnswerOwnerList')
                     ans = list(zip(*ans))[0]
                     scores = [aid_score[aid] for aid in ans]
@@ -389,8 +391,9 @@ def extract_question_best_answerer(data_dir, parsed_dir):
                 uaccid = accaid_uaid[acc_aid]
                 print("{} {}".format(qid, uaccid), file=fout)
             except:
-                logging.info("Error at Extracting question, best answer user: "
-                             + str(data))
+                logging.info(
+                    "Error at Extracting question, best answer user: "
+                     + str(data))
 
 
 def write_part_users(parsed_dir):

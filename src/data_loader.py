@@ -31,6 +31,10 @@ class DataLoader():
         self.uid2ind, self.ind2uid = {}, {}
         self.user_count = self.__create_uid_index()
 
+        # self.a2r, self.a2q, self.a2acc = {}, {}, {}
+        self.q2r, self.q2acc, self.q2a = {}, {}, {}
+        self.__load_rqa()
+
         self.process = True  # TODO: process manufacturing
 
         print("Done!")
@@ -97,6 +101,7 @@ class DataLoader():
             neg_ratio    -  the ratio of negative samples w.r.t.
                             the positive samples
         Return:
+            * All these vecs are in form of "[ENY]_[ID]" format
             upos         -  the u vector positions (1D Tensor)
             vpos         -  the v vector positions (1D Tensor)
             npos         -  the negative samples positions (2D Tensor)
@@ -137,7 +142,9 @@ class DataLoader():
         #     npairs_in_batch * 2 * window_size,
         #     int(npairs_in_batch * neg_ratio))
         npos = self.__separate_entity(neg_samples)
-        return upos, vpos, npos, npairs_in_batch
+
+        aqr, accqr = self.get_acc_ind(upos, vpos)
+        return upos, vpos, npos, npairs_in_batch, aqr, accqr
 
     def __separate_entity(self, entity_seq):
         """
@@ -324,6 +331,88 @@ class DataLoader():
         """
         vfunc = np.vectorize(lambda x: self.ind2uid[x])
         return vfunc(vec)
+
+    def __load_rqa(self):
+        """
+        Loading files to create
+
+        Loading Question to Question Raiser ID: self.q2r
+                Question to Accepted Answer ID: self.q2acc
+                Question to Answer Owner ID: self.q2a (list)
+        Return:
+            (No return) Just modify the above three dict inplace.
+        """
+        QR_input = self.datadir + "Q_R.txt"
+        QACC_input = self.datadir + "Q_ACC_A.txt"
+        QA_input = self.datadir + "Q_A.txt"
+
+        with open(QR_input, "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                Q, R = [int(x) for x in line.strip().split(" ")]
+                self.q2r[Q] = R
+
+        with open(QACC_input, "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                Q, Acc = [int(x) for x in line.strip().split(" ")]
+                self.q2acc[Q] = Acc
+
+        with open(QA_input, "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                Q, A = [int(x) for x in line.strip().split(" ")]
+                if A not in self.q2a:
+                    self.q2a[Q] = [A]
+                else:
+                    self.q2a[Q].append(A)
+
+    def get_acc_ind(self, upos, vpos):
+        """
+        This method is for Ranking CNN
+
+        Args:
+            upos  -  Label entity column
+            vpos  -  Context entity column
+        Return:
+            apos  -  Vector, first column Answerer,
+                             second column AccAnswerer
+                     If R-Q are not a pair, then not accepted
+        TODO:
+            For now, we only look at AQ pair. We can also implement
+            AR pair to list of Q's and sample some Q to construct tuples.
+            But those are left for future implementation.
+        WHY:
+        In upos and vpos, find all following pairs:
+            1 - "A-Q"
+            2 - "A-R" (Not implemented)
+        construct:
+            "A-R-Q", "A*-R-Q"
+        """
+        length = 0
+        if upos.shape[0] == vpos.shape[0]:
+            length = upos.shape[0]
+        else:
+            sys.exit("upos and vpos don't have same length")
+
+        # TODO: check if exist
+
+        # R: 0, A: 1, Q: 2
+        datalist = []
+        acclist = []
+        for i in range(length):
+            if upos[1][i] and vpos[2][i]:
+                aid = upos[1][i]
+                qid = vpos[2][i]
+                # Check this AQ relationship make sence
+                if aid in self.q2a[qid]:
+                    accaid = self.q2acc[qid]
+                    rid = self.q2r[qid]
+                    datalist.append([rid, aid, qid])
+                    acclist.append(accaid)
+        return np.array(datalist), np.array(acclist)
+
+
 
 
 if __name__ == "__main__":

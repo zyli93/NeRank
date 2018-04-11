@@ -83,15 +83,15 @@ class NeRank(nn.Module):
                       aupos, avpos, anpos,
                       quloc, qvloc, qnloc,
                       quemb, qvemb, qnemb,
-                      nsample):
+                      nsample,
+                      rank_a, rank_acc,
+                      rank_r, rank_q_emb):
         """
         forward algorithm for NeRank,
         quloc, qvloc, qnloc are locations in a vector of u, v,
             and negative samples where there is a question text.
         quemb, qvemb, qnemb are the word embedding piles of that
         """
-
-        dl = self.dl
 
         """
                 === Network Embedding Part ===
@@ -155,7 +155,14 @@ class NeRank(nn.Module):
             === Learning to Rank Part ===
         """
         # TODO:
-        #
+
+        emb_rank_acc = self.au_embeddings(rank_acc)
+        emb_rank_a = self.au_embeddings(rank_a)
+        emb_rank_r = self.ru_embeddings(rank_r)
+        emb_rank_q = self.ubirnn(rank_q_emb)
+
+
+
 
 
 

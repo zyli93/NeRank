@@ -52,10 +52,11 @@ class PDER:
             while dl.process:
                 # TODO: Here comes the get data and preprocessing
                 # TODO: what's in the batch
-                upos, vpos, npos, nsample = dl.generate_batch(
-                    window_size=self.window_size,
-                    batch_size=self.batch_size,
-                    neg_ratio=self.neg_sample_ration)
+                upos, vpos, npos, nsample, aqr, accqr \
+                    = dl.generate_batch(
+                        window_size=self.window_size,
+                        batch_size=self.batch_size,
+                        neg_ratio=self.neg_sample_ration)
 
                 # UID representation to user index representation
                 rupos, rvpos, rnpos = dl.uid2index(upos[0]), \
@@ -67,13 +68,14 @@ class PDER:
                 qupos, qvpos, qnpos = upos[2], vpos[2], npos[2]
 
                 """
-                In order to totally vectorize the computation, we use following method.
+                In order to totally vectorize the computation, 
+                we use following method.
                 qupos, qvpos, qnpos are the positions and ids of the text.
-                qudiag, qvdiag, qndiag have 1 in cells where the corresponding cell in qupos
+                qudiag, qvdiag, qndiag have 1 in cells 
+                where the corresponding cell in qupos
                     (qvpos, qnpos) is not zero.
                 We use dot product to zero out those undesired columns.
                 """
-
 
                 # Create the Variables, only Variables with LongTensor can be
                 #   sent to nn.Embedding
@@ -99,8 +101,18 @@ class PDER:
                 qvemb = Variable(torch.LongTensor(dl.qid2vec(qvpos)))
                 qnemb = Variable(torch.LongTensor(dl.qid2vec(qnpos)))
 
+                # aqr: R, A, Q
+                rank_r, rank_a = dl.uid2index(aqr[:, 0]), \
+                                 dl.uid2index(aqr[:, 1])
+                rank_acc = dl.uid2index(accqr)
+                rank_q = aqr[:, 2]
 
+                rank_a_var = Variable(torch.LongTensor(rank_a))
+                rank_acc_var = Variable(torch.LongTensor(rank_acc))
+                rank_r_var = Variable(torch.LongTensor(rank_r))
+                rank_q_emb = Variable(torch.LongTensor(dl.qid2vec(rank_q)))
 
+                # === ALL INPUT PROCESS ARE BEFORE THIS LINE ===
                 if torch.cuda.is_available():
                     rupos = rupos.cuda()
                     rvpos = rvpos.cuda()
@@ -115,6 +127,10 @@ class PDER:
                     qvemb = qvemb.cuda()
                     qnemb = qnemb.cuda()
 
+                    rank_a_var = rank_a_var.cuda()
+                    rank_acc_var = rank_acc_var.cuda()
+                    rank_r_var = rank_r_var.cuda()
+                    rank_q_emb = rank_q_emb.cuda()
 
                 optimizer.zero_grad()
 
@@ -122,7 +138,11 @@ class PDER:
                              aupos, avpos, anpos,
                              quloc, qvloc, qnloc,
                              quemb, qvemb, qnemb,
-                             nsample)  # TODO: fill in this
+                             nsample,
+                             rank_a_var,
+                             rank_acc_var,
+                             rank_r_var,
+                             rank_q_emb)  # TODO: fill in this
 
                 optimizer.step()
 
