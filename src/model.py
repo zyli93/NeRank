@@ -9,11 +9,12 @@
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 
 import numpy as np
 from data_loader import DataLoader
+
+from collections import OrderedDict
 
 class NeRank(nn.Module):
     """
@@ -63,9 +64,29 @@ class NeRank(nn.Module):
                               num_layers=number_layers,
                               batch_first=True,
                               bidirectional=True)
-        # TODO: anyone tell me what is this?
-        # self.fc = nn.Linear(hidden_size * 2, num)
 
+        # TODO: set up the size of the out_channel
+        out_cha = 32
+        self.convnet1 = nn.Sequential(OrderedDict([
+            ('conv1', nn.Conv2d(1, out_cha, kernel_size=(1, embedding_dim))),
+            ('relu1'. nn.ReLU())
+            ('pool1', nn.MaxPool2d(kernel_size=(3, 1)))
+        ]))
+
+        self.convnet2 = nn.Sequential(OrderedDict([
+            ('conv2', nn.Conv2d(2, out_cha, kernel_size=(2, embedding_dim))),
+            ('relu2', nn.ReLU()),
+            ('pool2', nn.MaxPool2d(kernel_size=(2, 1)))
+        ]))
+
+        self.convnet3 = nn.Sequential(OrderedDict([
+            ('conv3', nn.Conv2d(3, out_cha, kernel_size=(3, embedding_dim))),
+            ('relu3', nn.ReLU())
+        ]))
+
+        self.fc1 = nn.Linear(out_cha, 1)
+        self.fc2 = nn.Linear(out_cha, 1)
+        self.fc3 = nn.Linear(out_cha, 1)
 
 
     def init_emb(self):
@@ -147,7 +168,7 @@ class NeRank(nn.Module):
         neg_score = torch.sum(neg_score)
         sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
-        loss = log_target + sum_log_sampled
+        ne_loss = log_target + sum_log_sampled
 
 
         """
@@ -161,9 +182,28 @@ class NeRank(nn.Module):
         emb_rank_q = self.ubirnn(rank_q_emb)
 
         low_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a],
-                                   dim=2)
+                                   dim=1)
         high_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_acc],
-                                    dim=2)
+                                    dim=1)
+
+        low_score = self.fc1(self.convnet1(low_rank_mat)) \
+                    + self.fc2(self.convnet2(low_rank_mat)) \
+                    + self.fc3(self.convnet3(low_rank_mat))
+
+        high_score = self.fc3(self.convnet1(high_rank_mat)) \
+                    + self.fc2(self.convnet2(high_rank_mat)) \
+                    + self.fc3(self.convnet3(high_rank_mat))
+
+        rank_loss = low_score - high_score
+
+        loss = ne_loss + rank_loss
+        return loss
+
+
+
+
+
+
 
 
 
