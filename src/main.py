@@ -1,6 +1,5 @@
 from generate_walk import MetaPathGenerator
 from preprocessing import preprocess
-from data_loader import DataLoader
 from pder import PDER
 
 import os, sys
@@ -36,10 +35,12 @@ def runPDER(options):
         epoch_num=options.epoch_num,
         batch_size=options.batch_size,
         window_size=options.window_size,
-        neg_sample_ratio=options.neg_ratio
+        neg_sample_ratio=options.neg_ratio,
+        lstm_layers=options.lstm_layers
     )
 
     pder_model.train()
+    pder_model.test()
 
 
 
@@ -112,7 +113,7 @@ if __name__ == '__main__':
                       dest="lstm_layers", default=3,
                       help="The number of layers of the LSTM model.")
 
-    parser.add_option("-p", "--epoch-number", type="int",
+    parser.add_option("-o", "--epoch-number", type="int",
                       dest="epoch_num", default=1000,
                       help="The epoch number of the training set.")
 

@@ -31,12 +31,10 @@ class NeRank(nn.Module):
             - [ ] Move the model to CUDA
         - [ ] Name
     """
-    def __init__(self, embedding_dim, dataset, lstm_layers):
+    def __init__(self, embedding_dim, vocab_size, lstm_layers):
         super(NeRank, self).__init__()
 
         # u and v of vector of R, we will use u in the end
-        self.dl = DataLoader(dataset=dataset)
-        vocab_size = self.dl.user_count
         self.emb_dim = embedding_dim
 
         self.lstm_layers = lstm_layers
@@ -72,7 +70,7 @@ class NeRank(nn.Module):
         out_cha = 32
         self.convnet1 = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(1, out_cha, kernel_size=(1, embedding_dim))),
-            ('relu1'. nn.ReLU())
+            ('relu1', nn.ReLU()),
             ('pool1', nn.MaxPool2d(kernel_size=(3, 1)))
         ]))
 
@@ -148,7 +146,6 @@ class NeRank(nn.Module):
         neg_embed_rv = self.rv_embeddings(rnpos)
         neg_embed_av = self.av_embeddings(anpos)
 
-        # TODO: massage lstm imput
         _, (lstm_qnemb_hidden, _) = self.vbirnn(qnemb.unsqueeze(1), self.hc)
         neg_embed_qv = torch.matmul(torch.diag(qnloc), lstm_qnemb_hidden)
 
@@ -184,7 +181,7 @@ class NeRank(nn.Module):
         ne_loss = log_target + sum_log_sampled
 
         """
-            === Ranking Part ===
+            === Ranking ===
         """
 
         emb_rank_acc = self.au_embeddings(rank_acc)
@@ -198,12 +195,12 @@ class NeRank(nn.Module):
                                     dim=1)
 
         low_score = self.fc1(self.convnet1(low_rank_mat)) \
-                    + self.fc2(self.convnet2(low_rank_mat)) \
-                    + self.fc3(self.convnet3(low_rank_mat))
+                  + self.fc2(self.convnet2(low_rank_mat)) \
+                  + self.fc3(self.convnet3(low_rank_mat))
 
         high_score = self.fc3(self.convnet1(high_rank_mat)) \
-                    + self.fc2(self.convnet2(high_rank_mat)) \
-                    + self.fc3(self.convnet3(high_rank_mat))
+                   + self.fc2(self.convnet2(high_rank_mat)) \
+                   + self.fc3(self.convnet3(high_rank_mat))
 
         rank_loss = low_score - high_score
 

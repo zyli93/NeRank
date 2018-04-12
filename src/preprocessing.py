@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+import string
 
 try:
     import ujson as json
@@ -57,6 +58,34 @@ def clean_str(string):
     string = re.sub(r"\?", " \? ", string)
     string = re.sub(r"\s{2,}", " ", string)
     return string.strip().lower()
+
+
+def clean_str2(s):
+    """Clean up the string
+
+    * New version, removing all punctuations
+
+    Cleaning strings of content or title
+    Original taken from [https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py]
+
+    Args:
+        string - the string to clean
+
+    Return:
+        _ - the cleaned string
+    """
+    ss = s
+    translator = str.maketrans("", "", string.punctuation)
+    ss = re.sub(r"[^A-Za-z0-9(),!?\'\`]", "", ss)
+    ss = re.sub(r"\'s", "", ss)
+    ss = re.sub(r"\'ve", "ve", ss)
+    ss = re.sub(r"n\'t", "nt", ss)
+    ss = re.sub(r"\'re", "re", ss)
+    ss = re.sub(r"\'d", "d", ss)
+    ss = re.sub(r"\'ll", "ll", ss)
+    ss = re.sub(r"\s{2,}", " ", ss)
+    ss = ss.translate(translator)
+    return ss.strip().lower()
 
 
 def remove_stopwords(string, stopword_set):
@@ -287,7 +316,7 @@ def extract_question_content(data_dir, parsed_dir):
                 title = data.get('Title')
                 content = data.get('Body')
 
-                content, title = clean_str(content), clean_str(title)
+                content, title = clean_str2(content), clean_str2(title)
                 content_nsw = remove_stopwords(content, sw_set)
                 title_nsw = remove_stopwords(title, sw_set)
 

@@ -16,22 +16,29 @@ data_index = 0
 
 class DataLoader():
     def __init__(self, dataset):
-        print("Initializing data_loader ...", end=" ")
+        print("Initializing data_loader ...")
         self.dataset = dataset
         self.mpfile = os.getcwd() + "/metapath/"+ self.dataset +".txt"
         self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
 
+        print("\tLoading dataset ...")
         data = self.__read_data()
         self.train_data = data
+        print("\tCounting dataset ...")
         self.count = self.__count_dataset(data)
+        print("\tInitializing sample table ...")
         self.sample_table = self.__init_sample_table()
+        print("\tLoading word2vec model ...")
         self.w2vmodel = self.__load_word2vec()  # **Time Consuming!**
+        print("\tLoading questions ...")
         self.qid2sen = self.__load_questions()
 
+        print("\tCreating user-index mapping ...")
         self.uid2ind, self.ind2uid = {}, {}
         self.user_count = self.__create_uid_index()
 
         self.q2r, self.q2acc, self.q2a = {}, {}, {}
+        print("\tLoading rqa ...")
         self.__load_rqa()
 
         self.process = True  # TODO: process manufacturing
@@ -81,7 +88,7 @@ class DataLoader():
         pow_freq = np.array(count) ** 0.75
         ratio = pow_freq / sum(pow_freq)
         table_size = 1e8 # TODO: what is this???
-        count = np.round(ratio * table_size)
+        count = np.round(ratio * table_size).astype(np.int64)
         sample_table = []
 
         for i in range(len(self.count)):
@@ -361,7 +368,7 @@ class DataLoader():
             lines = fin.readlines()
             for line in lines:
                 Q, A = [int(x) for x in line.strip().split(" ")]
-                if A not in self.q2a:
+                if Q not in self.q2a:
                     self.q2a[Q] = [A]
                 else:
                     self.q2a[Q].append(A)

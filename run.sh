@@ -10,6 +10,9 @@ else
 fi
 
 $PY src/main.py --dataset 3dprinting \
-        --preprocess \
-        --gen-metapaths --length 15 --size 2 --alpha 0.0 --metapaths "AQRQA AQA"
+        --window-size 7 --neg-ratio 3.0 --embedding-dim 300 \
+        --lstm-layers 3 --epoch-number 1000 --batch-size 5
+        # --preprocess \
+        # --gen-metapaths --length 128 --coverage 10 --alpha 0.0 --metapaths "AQRQA" \
+
 

@@ -19,18 +19,23 @@ from data_loader import DataLoader
 
 class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
-                 batch_size, window_size, neg_sample_ratio):
+                 batch_size, window_size, neg_sample_ratio,
+                 lstm_layers):
         self.dl = DataLoader(dataset=dataset)
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
         self.window_size = window_size
         self.epoch_num = epoch_num
-        self.neg_sample_ration = neg_sample_ratio
+        self.neg_sample_ratio = neg_sample_ratio
+        self.lstm_layers = lstm_layers
+
 
     def train(self):
 
         dl = self.dl  # Rename the data loader
-        model = NeRank()  # TODO: fill in params
+        model = NeRank(embedding_dim=self.embedding_dim,
+                       vocab_size=dl.user_count,
+                       lstm_layers=self.lstm_layers)  # TODO: fill in params
         if torch.cuda.is_available():  # Check availability of cuda
             model.cuda()
 
@@ -45,7 +50,7 @@ class PDER:
                     = dl.generate_batch(
                         window_size=self.window_size,
                         batch_size=self.batch_size,
-                        neg_ratio=self.neg_sample_ration)
+                        neg_ratio=self.neg_sample_ratio)
 
                 # UID representation to user index representation
                 rupos, rvpos, rnpos = dl.uid2index(upos[0]), \
@@ -140,13 +145,16 @@ class PDER:
 
             # TODO: evaluate
 
+        self.evaluate()
         print("Optimization Finished!")
 
     def evaluate(self):
+        print("Evaluation under construction.")
         pass
         # TODO: implement here
 
     def test(self):
+        print("Testing under construction.")
         pass
         # TODO: implement here
 

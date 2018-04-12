@@ -29,4 +29,12 @@ PDER represents "Personalized Domain Expert Recommendation".
 
 - [ ] Mistakes to fix
     - [ ] some of the `LongTensor` should be `FloatTensor`.
+    - [ ] why there are so many logs
+
+
+- [ ] Parameter Tuning
+    - [ ] what is a good window size?
+
+- [ ] Beautiful output
+    - [ ] Show every step of the execution.
 
