@@ -11,7 +11,7 @@ PDER represents "Personalized Domain Expert Recommendation".
     - [ ] Remove unrelated directories and files
 
 - [ ] Coding
-    - [ ] Construct `main.py`
+    - [x] Construct `main.py`
     - [x] `generate_walk.py`
 
 - [ ] Verifying
@@ -26,4 +26,7 @@ PDER represents "Personalized Domain Expert Recommendation".
 - [ ] The transfer from User ID to real index.
     - [ ] This can be done earlier.
           For example, as early as when generating the metapaths
+
+- [ ] Mistakes to fix
+    - [ ] some of the `LongTensor` should be `FloatTensor`.
 

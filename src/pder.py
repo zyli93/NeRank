@@ -7,10 +7,8 @@
 """
 
 import torch
-import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
-import torch.nn.functional as F
 
 import numpy as np
 import time
@@ -20,21 +18,14 @@ from data_loader import DataLoader
 
 
 class PDER:
-    def __init__(self, dataset,
-                 vocab_size=1000000, embedding_dim=200,
-                 epoch_num=10, batch_size=16,
-                 window_size=5, neg_sample_ratio=10):
-
-        self.dl = DataLoader(dataset=dataset) # TODO: all params required
-        self.vocab_size = vocab_size
+    def __init__(self, dataset, embedding_dim, epoch_num,
+                 batch_size, window_size, neg_sample_ratio):
+        self.dl = DataLoader(dataset=dataset)
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
         self.window_size = window_size
         self.epoch_num = epoch_num
         self.neg_sample_ration = neg_sample_ratio
-
-        pass
-
 
     def train(self):
 
@@ -50,8 +41,6 @@ class PDER:
             dl.process = True
 
             while dl.process:
-                # TODO: Here comes the get data and preprocessing
-                # TODO: what's in the batch
                 upos, vpos, npos, nsample, aqr, accqr \
                     = dl.generate_batch(
                         window_size=self.window_size,
@@ -97,9 +86,9 @@ class PDER:
                 qvloc = Variable(torch.LongTensor(np.where(qvpos > 0, 1, 0)))
                 qnloc = Variable(torch.LongTensor(np.where(qnpos > 0, 1, 0)))
 
-                quemb = Variable(torch.LongTensor(dl.qid2vec(qupos)))
-                qvemb = Variable(torch.LongTensor(dl.qid2vec(qvpos)))
-                qnemb = Variable(torch.LongTensor(dl.qid2vec(qnpos)))
+                quemb = Variable(torch.FloatTensor(dl.qid2vec(qupos)))
+                qvemb = Variable(torch.FloatTensor(dl.qid2vec(qvpos)))
+                qnemb = Variable(torch.FloatTensor(dl.qid2vec(qnpos)))
 
                 # aqr: R, A, Q
                 rank_r, rank_a = dl.uid2index(aqr[:, 0]), \
@@ -110,7 +99,7 @@ class PDER:
                 rank_a_var = Variable(torch.LongTensor(rank_a))
                 rank_acc_var = Variable(torch.LongTensor(rank_acc))
                 rank_r_var = Variable(torch.LongTensor(rank_r))
-                rank_q_emb = Variable(torch.LongTensor(dl.qid2vec(rank_q)))
+                rank_q_emb = Variable(torch.FloatTensor(dl.qid2vec(rank_q)))
 
                 # === ALL INPUT PROCESS ARE BEFORE THIS LINE ===
                 if torch.cuda.is_available():
@@ -149,9 +138,15 @@ class PDER:
                 if not batch_num % 30000:
                     torch.save(model.state_dict(), "path here")
 
+            # TODO: evaluate
+
         print("Optimization Finished!")
 
     def evaluate(self):
+        pass
+        # TODO: implement here
+
+    def test(self):
         pass
         # TODO: implement here
 

@@ -31,7 +31,6 @@ class DataLoader():
         self.uid2ind, self.ind2uid = {}, {}
         self.user_count = self.__create_uid_index()
 
-        # self.a2r, self.a2q, self.a2acc = {}, {}, {}
         self.q2r, self.q2acc, self.q2a = {}, {}, {}
         self.__load_rqa()
 

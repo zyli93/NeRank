@@ -10,11 +10,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 
-import numpy as np
 from data_loader import DataLoader
 
 from collections import OrderedDict
+
 
 class NeRank(nn.Module):
     """
@@ -30,13 +31,15 @@ class NeRank(nn.Module):
             - [ ] Move the model to CUDA
         - [ ] Name
     """
-    def __init__(self, embedding_dim, dataset):
+    def __init__(self, embedding_dim, dataset, lstm_layers):
         super(NeRank, self).__init__()
 
         # u and v of vector of R, we will use u in the end
         self.dl = DataLoader(dataset=dataset)
         vocab_size = self.dl.user_count
         self.emb_dim = embedding_dim
+
+        self.lstm_layers = lstm_layers
         self.ru_embeddings = nn.Embedding(vocab_size,
                                          embedding_dim,
                                          sparse=False)
@@ -51,17 +54,17 @@ class NeRank(nn.Module):
                                           sparse=False)
         self.embedding_dim = embedding_dim
         self.init_emb()
+        self.hc = self.init_hc()
 
 
-        # TODO: fill in the BiLSTM
-        self.ubirnn = nn.LSTM(input_size=input_size,
-                             hidden_size=hiddens_size,
-                             num_layers=num_layers,
-                             batch_first=True,
-                             bidirectional=True)
-        self.vbirnn = nn.LSTM(input_size=input_size,
-                              hidden_size=hidden_size,
-                              num_layers=number_layers,
+        self.ubirnn = nn.LSTM(input_size=embedding_dim,
+                              hidden_size=embedding_dim,
+                              num_layers=self.lstm_layers,
+                              batch_first=True,
+                              bidirectional=True)
+        self.vbirnn = nn.LSTM(input_size=embedding_dim,
+                              hidden_size=embedding_dim,
+                              num_layers=self.lstm_layers,
                               batch_first=True,
                               bidirectional=True)
 
@@ -88,7 +91,6 @@ class NeRank(nn.Module):
         self.fc2 = nn.Linear(out_cha, 1)
         self.fc3 = nn.Linear(out_cha, 1)
 
-
     def init_emb(self):
         """Initialize R and A embeddings"""
         initrange = 0.5 / self.embedding_dim
@@ -99,14 +101,17 @@ class NeRank(nn.Module):
         self.ru_embeddings.weight.data[0].zero_()
         self.av_embeddings.weight.data.uniform_(-0, 0)
 
+    def init_hc(self):
+        h = Variable(torch.zeros(self.lstm_layers * 2, 1, self.embedding_dim))
+        c = Variable(torch.zeros(self.lstm_layers * 2, 1, self.embedding_dim))
+        if torch.cuda.is_available():
+            (h, c) = (h.cuda(), c.cuda())
+        return h, c
 
-    def forward(self, rupos, rvpos, rnpos,
-                      aupos, avpos, anpos,
-                      quloc, qvloc, qnloc,
-                      quemb, qvemb, qnemb,
+    def forward(self, rupos, rvpos, rnpos, aupos, avpos, anpos,
+                      quloc, qvloc, qnloc, quemb, qvemb, qnemb,
                       nsample,
-                      rank_a, rank_acc,
-                      rank_r, rank_q_emb):
+                      rank_a, rank_acc, rank_r, rank_q_emb):
         """
         forward algorithm for NeRank,
         quloc, qvloc, qnloc are locations in a vector of u, v,
@@ -115,7 +120,7 @@ class NeRank(nn.Module):
         """
 
         """
-                === Network Embedding Part ===
+            === Network Embedding Part ===
         """
         embed_ru = self.ru_embeddings(rupos)
         embed_au = self.au_embeddings(aupos)
@@ -125,8 +130,12 @@ class NeRank(nn.Module):
         # quemb here is just the concatenation of word vectors
         #   after this step, everything is equal length
 
-        embed_qu = torch.matmul(torch.diag(quloc), self.ubirnn(quemb))
-        embed_qv = torch.matmul(torch.diag(qvloc), self.vbirnn(qvemb))
+        _, (lstm_quemb_hidden, _) = self.ubirnn(quemb.unsqueeze(1), self.hc)
+
+        embed_qu = torch.matmul(torch.diag(quloc), lstm_quemb_hidden)
+
+        _, (lstm_qvemb_hidden, _) = self.vbirnn(qvemb.unsqueeze(1), self.hc)
+        embed_qv = torch.matmul(torch.diag(qvloc), lstm_qvemb_hidden)
 
         embed_u = embed_ru + embed_au + embed_qu
         embed_v = embed_rv + embed_av + embed_qv
@@ -138,7 +147,10 @@ class NeRank(nn.Module):
 
         neg_embed_rv = self.rv_embeddings(rnpos)
         neg_embed_av = self.av_embeddings(anpos)
-        neg_embed_qv = torch.matmul(torch.diag(qnloc), self.vbirnn(qnemb))
+
+        # TODO: massage lstm imput
+        _, (lstm_qnemb_hidden, _) = self.vbirnn(qnemb.unsqueeze(1), self.hc)
+        neg_embed_qv = torch.matmul(torch.diag(qnloc), lstm_qnemb_hidden)
 
         neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv
         neg_embed_v = neg_embed_v.view(nsample, self.emb_dim, -1)
@@ -164,17 +176,16 @@ class NeRank(nn.Module):
             In : LongTensor(N,M)
             Out: (N, W, embedding_dim)
         """
+
         neg_score = torch.bmm(neg_embed_v, embed_u.unsqueeze(2)).squeeze()
         neg_score = torch.sum(neg_score)
         sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
         ne_loss = log_target + sum_log_sampled
 
-
         """
-            === Learning to Rank Part ===
+            === Ranking Part ===
         """
-        # TODO:
 
         emb_rank_acc = self.au_embeddings(rank_acc)
         emb_rank_a = self.au_embeddings(rank_a)
@@ -198,21 +209,3 @@ class NeRank(nn.Module):
 
         loss = ne_loss + rank_loss
         return loss
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
