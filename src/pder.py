@@ -20,8 +20,9 @@ from data_loader import DataLoader
 class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
                  batch_size, window_size, neg_sample_ratio,
-                 lstm_layers):
-        self.dl = DataLoader(dataset=dataset)
+                 lstm_layers, include_content):
+        self.dl = DataLoader(dataset=dataset,
+                             include_content=include_content)
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
         self.window_size = window_size

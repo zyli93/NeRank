@@ -36,7 +36,8 @@ def runPDER(options):
         batch_size=options.batch_size,
         window_size=options.window_size,
         neg_sample_ratio=options.neg_ratio,
-        lstm_layers=options.lstm_layers
+        lstm_layers=options.lstm_layers,
+        include_content=options.include_content
     )
 
     pder_model.train()
@@ -47,7 +48,7 @@ def runPDER(options):
 if __name__ == '__main__':
     """Generating random walks and output to file
 
-    Args: 
+    Args:
         -d, --dataset (str)
         -l, --length (int)
         -c, --coverage (int)
@@ -61,6 +62,7 @@ if __name__ == '__main__':
         -y, --lstm-layers (int)
         -p, --epoch-number (int)
         -b, --batch-size (int)
+        -u, --include-content (bool)
 
     Returns:
         do everything
@@ -120,6 +122,10 @@ if __name__ == '__main__':
     parser.add_option("-b", "--batch-size", type="int",
                       dest="batch_size", default=10,
                       help="The number of meta-paths fed into the model each batch")
+
+    parser.add_option("-u", "--include-content", default=False,
+                      dest="include_content", action="store_true",
+                      help="Whether to include content in the text embedding")
 
     (options, args) = parser.parse_args()
 

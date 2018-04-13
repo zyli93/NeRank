@@ -15,9 +15,10 @@ import gensim
 data_index = 0
 
 class DataLoader():
-    def __init__(self, dataset):
+    def __init__(self, dataset, include_content):
         print("Initializing data_loader ...")
         self.dataset = dataset
+        self.include_content = include_content
         self.mpfile = os.getcwd() + "/metapath/"+ self.dataset +".txt"
         self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
 
@@ -171,7 +172,7 @@ class DataLoader():
             split = item.split("_")
             ent_type, ent_id = D[split[0]], int(split[1])
             sep[ent_type][index] = ent_id
-        return sep
+        return sep.astype(np.int64)
 
     def __slide_through(self, ind, window_size):
         """
@@ -211,8 +212,11 @@ class DataLoader():
         Return:
             qvec  -  the vector of the question, numpy.ndarray
         """
-        question = self.qid2sen[qid]
-        qvecs = self.w2vmodel[question.strip().split(" ")]
+        if qid:
+            question = self.qid2sen[qid]
+            qvecs = self.w2vmodel[question.strip().split(" ")]
+        else:
+            qvecs = np.zeros(1, 300)
         return qvecs
 
     def qid2vec(self, vec):
@@ -278,11 +282,12 @@ class DataLoader():
                 id, title = line.split(" ", 1)
                 qid2sen[id] = title.strip()
 
-        with open(qcfile, "r") as fin_c:
-            lines = fin_c.readlines()
-            for line in lines:
-                id, content = line.split(" ", 1)
-                qid2sen[id] += " " + content.strip()
+        if self.include_content:
+            with open(qcfile, "r") as fin_c:
+                lines = fin_c.readlines()
+                for line in lines:
+                    id, content = line.split(" ", 1)
+                    qid2sen[id] += " " + content.strip()
 
         return qid2sen
 

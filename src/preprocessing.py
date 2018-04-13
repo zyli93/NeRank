@@ -229,7 +229,7 @@ def extract_question_user(data_dir, parsed_dir):
                 data = json.loads(line)
                 qid = data['QuestionId']
                 owner_id = data['QuestionOwnerId']
-                part_user.add(int(qid))  # Adding participated questioners
+                part_user.add(int(owner_id))  # Adding participated questioners
                 print("{} {}".format(str(qid), str(owner_id)), file=fout)
 
 
@@ -269,7 +269,7 @@ def extract_question_answer_user(data_dir, parsed_dir):
             au_list = data['AnswerOwnerList']
             acid = data['AcceptedAnswerId']
             for aid, ans_owner_id in au_list:
-                part_user.add(int(aid))
+                part_user.add(int(ans_owner_id))
                 print("{} {}".format(str(qid), str(ans_owner_id)),
                       file=fout)
             print("{} {}".format(str(qid), str(acid)),
