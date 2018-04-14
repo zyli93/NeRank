@@ -216,7 +216,7 @@ class DataLoader():
             question = self.qid2sen[qid]
             qvecs = self.w2vmodel[question.strip().split(" ")]
         else:
-            qvecs = np.zeros(1, 300)
+            qvecs = np.zeros((1, 300))
         return qvecs
 
     def qid2vec(self, vec):
