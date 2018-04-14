@@ -76,8 +76,8 @@ def clean_str2(s):
     """
     ss = s
     translator = str.maketrans("", "", string.punctuation)
-    ss = re.sub(r"[^A-Za-z0-9(),!?\'\`]", "", ss)
-    ss = re.sub(r"\'s", "", ss)
+    ss = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", ss)
+    ss = re.sub(r"\'s", "s", ss)
     ss = re.sub(r"\'ve", "ve", ss)
     ss = re.sub(r"n\'t", "nt", ss)
     ss = re.sub(r"\'re", "re", ss)

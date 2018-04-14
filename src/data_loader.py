@@ -88,7 +88,7 @@ class DataLoader():
         count = [ele[1] for ele in self.count]
         pow_freq = np.array(count) ** 0.75
         ratio = pow_freq / sum(pow_freq)
-        table_size = 1e8 # TODO: what is this???
+        table_size = 1e6 # TODO: what is this???
         count = np.round(ratio * table_size).astype(np.int64)
         sample_table = []
 
@@ -214,10 +214,15 @@ class DataLoader():
         """
         if qid:
             question = self.qid2sen[qid]
-            qvecs = self.w2vmodel[question.strip().split(" ")]
+            question = [x for x in question.strip().split(" ")
+                          if x in self.w2vmodel.vocab]
+            qvecs = self.w2vmodel[question]
         else:
             qvecs = np.zeros((1, 300))
         return qvecs
+
+    def qtc(self, qid):
+        return self.__qid_to_concatenate_emb(qid)
 
     def qid2vec(self, vec):
         """
@@ -280,14 +285,14 @@ class DataLoader():
             lines = fin_t.readlines()
             for line in lines:
                 id, title = line.split(" ", 1)
-                qid2sen[id] = title.strip()
+                qid2sen[int(id)] = title.strip()
 
         if self.include_content:
             with open(qcfile, "r") as fin_c:
                 lines = fin_c.readlines()
                 for line in lines:
                     id, content = line.split(" ", 1)
-                    qid2sen[id] += " " + content.strip()
+                    qid2sen[int(id)] += " " + content.strip()
 
         return qid2sen
 
