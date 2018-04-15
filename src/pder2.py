@@ -9,6 +9,7 @@
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
+import torch.nn as nn
 
 import numpy as np
 import time
@@ -37,6 +38,9 @@ class PDER:
         model = NeRank(embedding_dim=self.embedding_dim,
                        vocab_size=dl.user_count,
                        lstm_layers=self.lstm_layers)  # TODO: fill in params
+        if torch.cuda.device_count() > 1:
+            print("Using {} GPUs".format(torch.cuda.device_count()))
+            model = nn.DataParallel(model)
         if torch.cuda.is_available():  # Check availability of cuda
             model.cuda()
 

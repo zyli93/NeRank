@@ -16,42 +16,42 @@ data_index = 0
 
 class DataLoader():
     def __init__(self, dataset, include_content):
-        print("Initializing data_loader ...")
+        print("initializing data_loader ...")
         self.dataset = dataset
         self.include_content = include_content
         self.mpfile = os.getcwd() + "/metapath/"+ self.dataset +".txt"
         self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
 
-        print("\tLoading dataset ...")
+        print("\tloading dataset ...")
         data = self.__read_data()
         self.train_data = data
-        print("\tCounting dataset ...")
+        print("\tcounting dataset ...")
         self.count = self.__count_dataset(data)
-        print("\tInitializing sample table ...")
+        print("\tinitializing sample table ...")
         self.sample_table = self.__init_sample_table()
-        print("\tLoading word2vec model ...")
-        self.w2vmodel = self.__load_word2vec()  # **Time Consuming!**
-        print("\tLoading questions ...")
+        print("\tloading word2vec model ...")
+        self.w2vmodel = self.__load_word2vec()  # **time consuming!**
+        print("\tloading questions ...")
         self.qid2sen = self.__load_questions()
 
-        print("\tCreating user-index mapping ...")
+        print("\tcreating user-index mapping ...")
         self.uid2ind, self.ind2uid = {}, {}
         self.user_count = self.__create_uid_index()
 
         self.q2r, self.q2acc, self.q2a = {}, {}, {}
-        print("\tLoading rqa ...")
+        print("\tloading rqa ...")
         self.__load_rqa()
 
-        self.process = True  # TODO: process manufacturing
+        self.process = True  # todo: process manufacturing
 
-        print("Done!")
+        print("done!")
 
     def __read_data(self):
         """
-        Read metapath dataset,
+        read metapath dataset,
             load the dataset into data
 
-        Return:
+        return:
             data  -  the metapath dataset
         """
         with open(self.mpfile, "r") as fin:
@@ -61,11 +61,11 @@ class DataLoader():
 
     def __count_dataset(self, data):
         """
-        Read dataset and count the frequency
+        read dataset and count the frequency
 
-        Args:
+        args:
             data  -  the list of meta-pathes.
-        Returns:
+        returns:
             count  - the sorted list of
         """
         count_dict = {}
@@ -80,15 +80,15 @@ class DataLoader():
 
     def __init_sample_table(self):
         """
-        Create sample tables by P()^(3/4)
+        create sample tables by p()^(3/4)
 
-        Return:
+        return:
             (sample_table)  -  the created sample table
         """
         count = [ele[1] for ele in self.count]
         pow_freq = np.array(count) ** 0.75
         ratio = pow_freq / sum(pow_freq)
-        table_size = 1e6 # TODO: what is this???
+        table_size = 1e6 # todo: what is this???
         count = np.round(ratio * table_size).astype(np.int64)
         sample_table = []
 
@@ -98,20 +98,20 @@ class DataLoader():
 
     def generate_batch(self, window_size, batch_size, neg_ratio):
         """
-        Get batch from the meta paths for the training of skip-gram
+        get batch from the meta paths for the training of skip-gram
             model.
 
-        Args:
-            window_size  -  the size of sliding window. In following case,
+        args:
+            window_size  -  the size of sliding window. in following case,
                             the window size is 2. "_ _ [ ] _ _"
             batch_size   -  how many meta-paths compose a batch
             neg_ratio    -  the ratio of negative samples w.r.t.
                             the positive samples
-        Return:
-            * All these vecs are in form of "[ENY]_[ID]" format
-            upos         -  the u vector positions (1D Tensor)
-            vpos         -  the v vector positions (1D Tensor)
-            npos         -  the negative samples positions (2D Tensor)
+        return:
+            * all these vecs are in form of "[eny]_[id]" format
+            upos         -  the u vector positions (1d tensor)
+            vpos         -  the v vector positions (1d tensor)
+            npos         -  the negative samples positions (2d tensor)
         """
         data = self.train_data
         global data_index
@@ -124,8 +124,8 @@ class DataLoader():
             pairs = self.__slide_through(data_index, window_size)
             if data_index + 1 < len(data):
                 data_index += 1
-            else:  # Meet the end of the dataset
-                self.process = False
+            else:  # meet the end of the dataset
+                self.process = false
                 break
             pairs_list += pairs
 
@@ -136,16 +136,16 @@ class DataLoader():
         npairs_in_batch = len(pairs_list)
         neg_samples = np.random.choice(
             self.sample_table,
-            # First get a long neg sample list
-            # Then after separating entity, reshape to 3xLxH
+            # first get a long neg sample list
+            # then after separating entity, reshape to 3xlxh
             size=(npairs_in_batch * 2 * window_size
                   * int(npairs_in_batch * neg_ratio)))
 
-        # WHY:
-        #   Instead of returning a mat, here it return a long np.array.
-        #   In the model, it reshape.
+        # why:
+        #   instead of returning a mat, here it return a long np.array.
+        #   in the model, it reshape.
         # npos = self.__separate_entity(neg_samples).reshape(
-        #     3,  # RAQ for 3 sub-matrices
+        #     3,  # raq for 3 sub-matrices
         #     npairs_in_batch * 2 * window_size,
         #     int(npairs_in_batch * neg_ratio))
         npos = self.__separate_entity(neg_samples)
@@ -155,15 +155,15 @@ class DataLoader():
 
     def __separate_entity(self, entity_seq):
         """
-        Change a list from "A_1 Q_2 R_1 Q_2" to three vectors
-            A: 1 0 0 0
-            Q: 0 2 0 2
-            R: 0 0 1 0
+        change a list from "a_1 q_2 r_1 q_2" to three vectors
+            a: 1 0 0 0
+            q: 0 2 0 2
+            r: 0 0 1 0
 
-        Args:
+        args:
             entity_seq  -  the sequence of entities, type=np.array[(str)]
 
-        Return:
+        return:
             three dimensional matrix representing above matrix
         """
         D = {"A": 1, "Q": 2, "R": 0}
@@ -176,12 +176,12 @@ class DataLoader():
 
     def __slide_through(self, ind, window_size):
         """
-        Sliding through one span, generate all pairs in it
+        sliding through one span, generate all pairs in it
 
-        Args:
+        args:
             ind  -  the index of the label entity
             window_size  -  the window_size of context
-        Return:
+        return:
             the pair list
         """
         meta_path = self.train_data[ind]
@@ -204,19 +204,29 @@ class DataLoader():
 
     def __qid_to_concatenate_emb(self, qid):
         """
-        Given Qid, return the concatenated word vectors
+        given qid, return the concatenated word vectors
 
-        Args:
+        args:
             qid  -  the qid
 
-        Return:
+        return:
             qvec  -  the vector of the question, numpy.ndarray
         """
         if qid:
             question = self.qid2sen[qid]
             question = [x for x in question.strip().split(" ")
                           if x in self.w2vmodel.vocab]
-            qvecs = self.w2vmodel[question]
+            if not question:
+                qvecs = np.random.random(300)
+            else:
+                qvecs = self.w2vmodel[question]
+            # try:
+            #     qvecs = self.w2vmodel[question]
+            # except:
+            #     print("qid", qid)
+            #     print(self.qid2sen[qid])
+            #     print(question)
+            #     sys.exit("Terminate")
         else:
             qvecs = np.zeros((1, 300))
         return qvecs

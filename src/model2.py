@@ -54,12 +54,12 @@ class NeRank(nn.Module):
         self.ubirnn = nn.LSTM(input_size=embedding_dim,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
-                              batch_first=True,
+                              # batch_first=True,
                               bidirectional=True)
         self.vbirnn = nn.LSTM(input_size=embedding_dim,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
-                              batch_first=True,
+                              # batch_first=True,
                               bidirectional=True)
 
         # TODO: set up the size of the out_channel
@@ -87,7 +87,7 @@ class NeRank(nn.Module):
 
     def init_emb(self):
         """Initialize R and A embeddings"""
-        initrange = 0.5 / self.embedding_dim
+        initrange = 0.5 / self.emb_dim
         self.ru_embeddings.weight.data.uniform_(-initrange, initrange)
         self.ru_embeddings.weight.data[0].zero_()
         self.rv_embeddings.weight.data.uniform_(-0, 0)
@@ -96,13 +96,13 @@ class NeRank(nn.Module):
         self.av_embeddings.weight.data.uniform_(-0, 0)
 
     def init_hc(self):
-        h = Variable(torch.zeros(self.lstm_layers * 2, 1, self.embedding_dim))
-        c = Variable(torch.zeros(self.lstm_layers * 2, 1, self.embedding_dim))
+        h = Variable(torch.zeros(self.lstm_layers * 2, 1, self.emb_dim))
+        c = Variable(torch.zeros(self.lstm_layers * 2, 1, self.emb_dim))
         if torch.cuda.is_available():
             (h, c) = (h.cuda(), c.cuda())
         return h, c
 
-    def forward(self, rpos, apos, qpos, rank, nsample, dl=DataLoader()):
+    def forward(self, rpos, apos, qpos, rank, nsample, dl):
         """
         forward algorithm for NeRank,
         quloc, qvloc, qnloc are locations in a vector of u, v,
@@ -126,24 +126,36 @@ class NeRank(nn.Module):
         neg_embed_rv = self.rv_embeddings(rpos[2])
         neg_embed_av = self.av_embeddings(apos[2])
 
-        embed_qu = Variable(torch.zeros((qpos[0].shape[0], self.emb_dim)))
-        embed_qv = Variable(torch.zeros((qpos[1].shape[0], self.emb_dim)))
-        neg_embed_qv = Variable(torch.zeros((qpos[2].shape[0], self.emb_dim)))
+        embed_qu = Variable(torch.zeros((qpos[0].shape[0], self.emb_dim)), volatile=True)
+        embed_qv = Variable(torch.zeros((qpos[1].shape[0], self.emb_dim)), volatile=True)
+        neg_embed_qv = Variable(torch.zeros((qpos[2].shape[0], self.emb_dim)), volatile=True)
 
         for ind, qid in enumerate(qpos[0]):  # 0 for "u"
-            lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1))
-            _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.hc)
-            embed_qu.data[ind] = lstm_last_hidden
+            qid = int(qid)
+            if qid:
+                lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+                _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.hc)
+                embed_qu.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+            else:
+                embed_qu.data[ind] = torch.zeros((1, self.emb_dim))
 
         for ind, qid in enumerate(qpos[1]):
-            lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1))
-            _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.hc)
-            embed_qv.data[ind] = lstm_last_hidden
+            qid = int(qid)
+            if qid:
+                lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+                _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.hc)
+                embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+            else:
+                embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
 
         for ind, qid in enumerate(qpos[2]):
-            lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1))
-            _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.hc)
-            neg_embed_qv.data[ind] = lstm_last_hidden
+            qid = int(qid)
+            if qid:
+                lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+                _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.hc)
+                neg_embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+            else:
+                neg_embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
 
         embed_u = embed_ru + embed_au + embed_qu
         embed_v = embed_rv + embed_av + embed_qv
@@ -194,9 +206,10 @@ class NeRank(nn.Module):
         emb_rank_q = Variable(torch.zeros((rank[3].shape[0], self.emb_dim)))
 
         for ind, qid in enumerate(rank[3]):
-            lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1))
+            qid = int(qid)
+            lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
             _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.hc)
-            emb_rank_q.data[ind] = lstm_last_hidden
+            emb_rank_q.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
 
         low_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a], dim=1)
         high_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_acc], dim=1)
@@ -211,5 +224,5 @@ class NeRank(nn.Module):
 
         rank_loss = F.logsigmoid(low_score - high_score)
 
-        loss = ne_loss + rank_loss
+        loss = ne_loss.data + rank_loss.data
         return loss
