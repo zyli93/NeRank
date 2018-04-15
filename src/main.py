@@ -127,6 +127,11 @@ if __name__ == '__main__':
                       dest="include_content", action="store_true",
                       help="Whether to include content in the text embedding")
 
+    parser.add_option("-r", "--learning-rate", type="float",
+                      dest="learning_rate", default=0.01,
+                      help="The learning rate.")
+
+
     (options, args) = parser.parse_args()
 
     runPDER(options)

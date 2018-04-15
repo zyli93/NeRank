@@ -110,6 +110,8 @@ class PDER:
                 loss = model(rpos=rpos, apos=apos, qpos=qpos,
                              rank=rank, nsample=nsample, dl=dl)
 
+                loss.backward()
+
                 optimizer.step()
 
                 # Save model

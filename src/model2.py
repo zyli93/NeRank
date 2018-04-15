@@ -49,7 +49,6 @@ class NeRank(nn.Module):
                                           embedding_dim,
                                           sparse=False)
         self.init_emb()
-        self.hc = self.init_hc()
 
         self.ubirnn = nn.LSTM(input_size=embedding_dim,
                               hidden_size=embedding_dim,
@@ -134,7 +133,7 @@ class NeRank(nn.Module):
             qid = int(qid)
             if qid:
                 lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
-                _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.hc)
+                _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
                 embed_qu.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 embed_qu.data[ind] = torch.zeros((1, self.emb_dim))
@@ -143,7 +142,7 @@ class NeRank(nn.Module):
             qid = int(qid)
             if qid:
                 lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
-                _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.hc)
+                _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
                 embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
@@ -152,7 +151,7 @@ class NeRank(nn.Module):
             qid = int(qid)
             if qid:
                 lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
-                _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.hc)
+                _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
                 neg_embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 neg_embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
@@ -208,7 +207,7 @@ class NeRank(nn.Module):
         for ind, qid in enumerate(rank[3]):
             qid = int(qid)
             lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
-            _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.hc)
+            _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
             emb_rank_q.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
 
         low_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a], dim=1)
