@@ -13,7 +13,7 @@ import torch.optim as optim
 import numpy as np
 import time
 
-from model import NeRank
+from model2 import NeRank
 from data_loader import DataLoader
 
 
@@ -141,8 +141,8 @@ class PDER:
 
                 optimizer.step()
 
-                if not batch_num % 30000:
-                    torch.save(model.state_dict(), "path here")
+                # Save model
+                # torch.save(model.state_dict(), "path here")
 
             # TODO: evaluate
 
