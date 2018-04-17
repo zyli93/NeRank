@@ -62,27 +62,27 @@ class NeRank(nn.Module):
                               bidirectional=True)
 
         # TODO: set up the size of the out_channel
-        out_cha = 32
+        self.out_cha = 32
         self.convnet1 = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(1, out_cha, kernel_size=(1, embedding_dim))),
+            ('conv1', nn.Conv2d(1, self.out_cha, kernel_size=(1, embedding_dim))),
             ('relu1', nn.ReLU()),
             ('pool1', nn.MaxPool2d(kernel_size=(3, 1)))
         ]))
 
         self.convnet2 = nn.Sequential(OrderedDict([
-            ('conv2', nn.Conv2d(2, out_cha, kernel_size=(2, embedding_dim))),
+            ('conv2', nn.Conv2d(1, self.out_cha, kernel_size=(2, embedding_dim))),
             ('relu2', nn.ReLU()),
             ('pool2', nn.MaxPool2d(kernel_size=(2, 1)))
         ]))
 
         self.convnet3 = nn.Sequential(OrderedDict([
-            ('conv3', nn.Conv2d(3, out_cha, kernel_size=(3, embedding_dim))),
+            ('conv3', nn.Conv2d(1, self.out_cha, kernel_size=(3, embedding_dim))),
             ('relu3', nn.ReLU())
         ]))
 
-        self.fc1 = nn.Linear(out_cha, 1)
-        self.fc2 = nn.Linear(out_cha, 1)
-        self.fc3 = nn.Linear(out_cha, 1)
+        self.fc1 = nn.Linear(self.out_cha, 1)
+        self.fc2 = nn.Linear(self.out_cha, 1)
+        self.fc3 = nn.Linear(self.out_cha, 1)
 
     def init_emb(self):
         """Initialize R and A embeddings"""
@@ -125,9 +125,9 @@ class NeRank(nn.Module):
         neg_embed_rv = self.rv_embeddings(rpos[2])
         neg_embed_av = self.av_embeddings(apos[2])
 
-        embed_qu = Variable(torch.zeros((qpos[0].shape[0], self.emb_dim)), volatile=True)
-        embed_qv = Variable(torch.zeros((qpos[1].shape[0], self.emb_dim)), volatile=True)
-        neg_embed_qv = Variable(torch.zeros((qpos[2].shape[0], self.emb_dim)), volatile=True)
+        embed_qu = Variable(torch.zeros((qpos[0].shape[0], self.emb_dim)).cuda())
+        embed_qv = Variable(torch.zeros((qpos[1].shape[0], self.emb_dim)).cuda())
+        neg_embed_qv = Variable(torch.zeros((qpos[2].shape[0], self.emb_dim)).cuda())
 
         for ind, qid in enumerate(qpos[0]):  # 0 for "u"
             qid = int(qid)
@@ -137,7 +137,8 @@ class NeRank(nn.Module):
                 embed_qu.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 embed_qu.data[ind] = torch.zeros((1, self.emb_dim))
-
+        print("qpos[0] done!")
+  
         for ind, qid in enumerate(qpos[1]):
             qid = int(qid)
             if qid:
@@ -146,6 +147,7 @@ class NeRank(nn.Module):
                 embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
+        print("qpos[1] done!")
 
         for ind, qid in enumerate(qpos[2]):
             qid = int(qid)
@@ -155,6 +157,7 @@ class NeRank(nn.Module):
                 neg_embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 neg_embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
+        print("qpos[2] done!")
 
         embed_u = embed_ru + embed_au + embed_qu
         embed_v = embed_rv + embed_av + embed_qv
@@ -165,7 +168,8 @@ class NeRank(nn.Module):
         log_target = F.logsigmoid(score).squeeze()
 
         neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv
-        neg_embed_v = neg_embed_v.view(nsample, self.emb_dim, -1)
+        neg_embed_v = neg_embed_v.view(nsample, -1, self.emb_dim)
+
         """
         Some notes around here.
         * unsqueeze(): add 1 dim in certain position
@@ -192,7 +196,6 @@ class NeRank(nn.Module):
         sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
         ne_loss = log_target + sum_log_sampled
-        print("Network Embedding loss:", end="")
         print(ne_loss)
 
         """
@@ -202,26 +205,31 @@ class NeRank(nn.Module):
         emb_rank_r = self.ru_embeddings(rank[0])
         emb_rank_a = self.au_embeddings(rank[1])
         emb_rank_acc = self.au_embeddings(rank[2])
-        emb_rank_q = Variable(torch.zeros((rank[3].shape[0], self.emb_dim)))
+        emb_rank_q = torch.zeros((rank[3].shape[0], self.emb_dim)).cuda()
 
         for ind, qid in enumerate(rank[3]):
             qid = int(qid)
             lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
             _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
-            emb_rank_q.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+            emb_rank_q[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+        emb_rank_q = Variable(emb_rank_q)
 
         low_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a], dim=1)
+        low_rank_mat = low_rank_mat.unsqueeze(1)
         high_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_acc], dim=1)
+        high_rank_mat = high_rank_mat.unsqueeze(1)
 
-        low_score = self.fc1(self.convnet1(low_rank_mat)) \
-                  + self.fc2(self.convnet2(low_rank_mat)) \
-                  + self.fc3(self.convnet3(low_rank_mat))
 
-        high_score = self.fc3(self.convnet1(high_rank_mat)) \
-                   + self.fc2(self.convnet2(high_rank_mat)) \
-                   + self.fc3(self.convnet3(high_rank_mat))
+        low_score = self.fc1(self.convnet1(low_rank_mat).view(-1, self.out_cha)) \
+                  + self.fc2(self.convnet2(low_rank_mat).view(-1, self.out_cha)) \
+                  + self.fc3(self.convnet3(low_rank_mat).view(-1, self.out_cha))
 
-        rank_loss = F.logsigmoid(low_score - high_score)
+        high_score = self.fc1(self.convnet1(high_rank_mat).view(-1, self.out_cha)) \
+                   + self.fc2(self.convnet2(high_rank_mat).view(-1, self.out_cha)) \
+                   + self.fc3(self.convnet3(high_rank_mat).view(-1, self.out_cha))
 
-        loss = ne_loss.data + rank_loss.data
+        rank_loss = torch.sum(low_score - high_score)
+
+        loss = F.sigmoid(ne_loss) + F.sigmoid(rank_loss)
+        print("The loss is {}".format(loss.data[0]))
         return loss

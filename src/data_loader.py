@@ -125,7 +125,7 @@ class DataLoader():
             if data_index + 1 < len(data):
                 data_index += 1
             else:  # meet the end of the dataset
-                self.process = false
+                self.process = False
                 break
             pairs_list += pairs
 
@@ -138,8 +138,7 @@ class DataLoader():
             self.sample_table,
             # first get a long neg sample list
             # then after separating entity, reshape to 3xlxh
-            size=(npairs_in_batch * 2 * window_size
-                  * int(npairs_in_batch * neg_ratio)))
+            size=(2 * window_size * int(npairs_in_batch * neg_ratio)))
 
         # why:
         #   instead of returning a mat, here it return a long np.array.
@@ -217,7 +216,7 @@ class DataLoader():
             question = [x for x in question.strip().split(" ")
                           if x in self.w2vmodel.vocab]
             if not question:
-                qvecs = np.random.random(300)
+                qvecs = np.random.random(300).reshape((1, 300))
             else:
                 qvecs = self.w2vmodel[question]
             # try:
@@ -401,9 +400,11 @@ class DataLoader():
             upos  -  Label entity column
             vpos  -  Context entity column
         Return:
-            apos  -  Vector, first column Answerer,
-                             second column AccAnswerer
-                     If R-Q are not a pair, then not accepted
+            aqr   -  three cols list:
+                     A of upos, Q of vpos, R of this Q
+            acc   -  one col list:
+                     the Accepted answer in the corresponding pos
+                     
         TODO:
             For now, we only look at AQ pair. We can also implement
             AR pair to list of Q's and sample some Q to construct tuples.
@@ -415,13 +416,7 @@ class DataLoader():
         construct:
             "A-R-Q", "A*-R-Q"
         """
-        length = 0
-        if upos.shape[0] == vpos.shape[0]:
-            length = upos.shape[0]
-        else:
-            sys.exit("upos and vpos don't have same length")
-
-        # TODO: check if exist
+        length = upos.shape[1]
 
         # R: 0, A: 1, Q: 2
         datalist = []
