@@ -53,17 +53,13 @@ class PDER:
             iter = 0
 
             while dl.process:
-                print("Epoch num", epoch)
-                print("Iteration", iter)
+                print("Epoch-{}, Iteration-{}".format(epoch, iter), end="")
                 upos, vpos, npos, nsample, aqr, accqr \
                     = dl.generate_batch(
                         window_size=self.window_size,
                         batch_size=self.batch_size,
                         neg_ratio=self.neg_sample_ratio)
-                print("Get batch done")
-                print("PDER Sample size", nsample)
-
-                # UID representation to user index representation
+                print("\tSample size", nsample)
 
                 """
                 In order to totally vectorize the computation, 
@@ -90,35 +86,19 @@ class PDER:
                 anpos = Variable(torch.LongTensor(dl.uid2index(npos[1])))
                 apos = [aupos, avpos, anpos]
 
-                print("RA variable done")
-
                 # Q
                 qupos = Variable(torch.LongTensor(upos[2]))
                 qvpos = Variable(torch.LongTensor(vpos[2]))
                 qnpos = Variable(torch.LongTensor(npos[2]))
                 qpos = [qupos, qvpos, qnpos]
 
-                print("Q variable done")
-
                 # aqr: R, A, Q
-                print("aqr.shape=", aqr.shape)
-                print("accqr.shape=", accqr.shape)
 
                 rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
-                print("rank_r.shape", rank_r.shape)
-
                 rank_a = Variable(torch.LongTensor(dl.uid2index(aqr[:, 1])))
-                print("rank_a.shape", rank_a.shape)
-
                 rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))
-                print("rank_acc.shape", rank_acc.shape)
-
                 rank_q = Variable(torch.LongTensor(aqr[:, 2]))
-                print("rank_q.shape", rank_q.shape)
-
                 rank = [rank_r, rank_a, rank_acc, rank_q]
-
-                print("Rank done")
 
                 # === ALL INPUT PROCESS ARE BEFORE THIS LINE ===
                 if torch.cuda.is_available():
@@ -131,8 +111,6 @@ class PDER:
 
                 loss = model(rpos=rpos, apos=apos, qpos=qpos,
                              rank=rank, nsample=nsample, dl=dl)
-
-                print("Got loss")
 
                 loss.backward()
 

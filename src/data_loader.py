@@ -126,6 +126,7 @@ class DataLoader():
                 data_index += 1
             else:  # meet the end of the dataset
                 self.process = False
+                data_index = 0
                 break
             pairs_list += pairs
 
@@ -138,7 +139,7 @@ class DataLoader():
             self.sample_table,
             # first get a long neg sample list
             # then after separating entity, reshape to 3xlxh
-            size=(2 * window_size * int(npairs_in_batch * neg_ratio)))
+            size= int(npairs_in_batch * neg_ratio))
 
         # why:
         #   instead of returning a mat, here it return a long np.array.
@@ -219,13 +220,6 @@ class DataLoader():
                 qvecs = np.random.random(300).reshape((1, 300))
             else:
                 qvecs = self.w2vmodel[question]
-            # try:
-            #     qvecs = self.w2vmodel[question]
-            # except:
-            #     print("qid", qid)
-            #     print(self.qid2sen[qid])
-            #     print(question)
-            #     sys.exit("Terminate")
         else:
             qvecs = np.zeros((1, 300))
         return qvecs
@@ -432,8 +426,6 @@ class DataLoader():
                     datalist.append([rid, aid, qid])
                     acclist.append(accaid)
         return np.array(datalist), np.array(acclist)
-
-
 
 
 if __name__ == "__main__":

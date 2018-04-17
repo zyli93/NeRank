@@ -137,7 +137,6 @@ class NeRank(nn.Module):
                 embed_qu.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 embed_qu.data[ind] = torch.zeros((1, self.emb_dim))
-        print("qpos[0] done!")
   
         for ind, qid in enumerate(qpos[1]):
             qid = int(qid)
@@ -147,7 +146,6 @@ class NeRank(nn.Module):
                 embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
-        print("qpos[1] done!")
 
         for ind, qid in enumerate(qpos[2]):
             qid = int(qid)
@@ -157,7 +155,6 @@ class NeRank(nn.Module):
                 neg_embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
                 neg_embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
-        print("qpos[2] done!")
 
         embed_u = embed_ru + embed_au + embed_qu
         embed_v = embed_rv + embed_av + embed_qv
@@ -196,7 +193,6 @@ class NeRank(nn.Module):
         sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
         ne_loss = log_target + sum_log_sampled
-        print(ne_loss)
 
         """
             === Ranking ===
