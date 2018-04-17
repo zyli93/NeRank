@@ -42,6 +42,9 @@ class DataLoader():
         print("\tloading rqa ...")
         self.__load_rqa()
 
+        print("\tcreating qid embeddings map")
+        self.qid2emb = self.__qid2embedding()
+
         self.process = True  # todo: process manufacturing
 
         print("done!")
@@ -426,6 +429,26 @@ class DataLoader():
                     datalist.append([rid, aid, qid])
                     acclist.append(accaid)
         return np.array(datalist), np.array(acclist)
+
+    def __qid2embedding(self):
+        """
+        Quickly load concatenated sentence vectors to from qid
+
+        Return:
+            qid2emb  -  the loaded map
+        """
+        qid2emb  = {}
+        for qid in self.q2r.keys():
+            qid2emb[qid] = self.__qid_to_concatenate_emb(qid)
+        return qid2emb
+
+    def q2emb(self, qid):
+        """
+        Getter func of qid2emb
+        Args:
+            qid  -  Hello
+        """
+        return self.qid2emb[qid]
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ from data_loader import DataLoader
 class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
                  batch_size, window_size, neg_sample_ratio,
-                 lstm_layers, include_content):
+                 lstm_layers, include_content, lr):
         self.dl = DataLoader(dataset=dataset,
                              include_content=include_content)
         self.embedding_dim = embedding_dim
@@ -30,24 +30,24 @@ class PDER:
         self.epoch_num = epoch_num
         self.neg_sample_ratio = neg_sample_ratio
         self.lstm_layers = lstm_layers
-
+        self.learning_rate = lr
+        self.model = NeRank(embedding_dim=self.embedding_dim,
+                     vocab_size=self.dl.user_count,
+                     lstm_layers=self.lstm_layers)  # TODO: fill in params
 
     def train(self):
-
         dl = self.dl  # Rename the data loader
-        model = NeRank(embedding_dim=self.embedding_dim,
-                       vocab_size=dl.user_count,
-                       lstm_layers=self.lstm_layers)  # TODO: fill in params
+        model = self.model
         if torch.cuda.device_count() < 1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
             model = nn.DataParallel(model)
         if torch.cuda.is_available():  # Check availability of cuda
             model.cuda()
 
-        optimizer = optim.SGD(model.parameters(), lr=0.2)  # TODO: to other optimizer
+        optimizer = optim.SGD(model.parameters(), lr=self.learning_rate)
 
         for epoch in range(self.epoch_num):
-            start = time.time()
+            epoch_total_loss = 0
             dl.process = True
 
             iter = 0
@@ -100,7 +100,6 @@ class PDER:
                 rank_q = Variable(torch.LongTensor(aqr[:, 2]))
                 rank = [rank_r, rank_a, rank_acc, rank_q]
 
-                # === ALL INPUT PROCESS ARE BEFORE THIS LINE ===
                 if torch.cuda.is_available():
                     rpos = [x.cuda() for x in rpos]
                     apos = [x.cuda() for x in apos]
@@ -113,23 +112,22 @@ class PDER:
                              rank=rank, nsample=nsample, dl=dl)
 
                 loss.backward()
-
                 optimizer.step()
 
+                epoch_total_loss += loss.data[0]  # type(loss) = Variable
                 iter += 1
 
                 # Save model
                 # torch.save(model.state_dict(), "path here")
 
-            # TODO: evaluate
+            print("Epoch-{:d} Loss sum: {}".format(epoch, epoch_total_loss))
 
-        self.evaluate()
+            self.__validate()
+
         print("Optimization Finished!")
 
-    def evaluate(self):
-        print("Evaluation under construction.")
-        pass
-        # TODO: implement here
+    def __validate(self):
+        print()
 
     def test(self):
         print("Testing under construction.")
@@ -140,3 +138,4 @@ class PDER:
 if __name__ == "__main__":
     pder = PDER() # TODO: implement here
     pder.train()
+    pder.test()

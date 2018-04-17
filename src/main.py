@@ -37,7 +37,8 @@ def runPDER(options):
         window_size=options.window_size,
         neg_sample_ratio=options.neg_ratio,
         lstm_layers=options.lstm_layers,
-        include_content=options.include_content
+        include_content=options.include_content,
+        lr=options.learning_rate
     )
 
     pder_model.train()
@@ -63,6 +64,7 @@ if __name__ == '__main__':
         -p, --epoch-number (int)
         -b, --batch-size (int)
         -u, --include-content (bool)
+        -r, --learning-rate (float)
 
     Returns:
         do everything

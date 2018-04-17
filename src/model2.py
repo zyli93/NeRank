@@ -132,7 +132,8 @@ class NeRank(nn.Module):
         for ind, qid in enumerate(qpos[0]):  # 0 for "u"
             qid = int(qid)
             if qid:
-                lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+                # lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+                lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
                 _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
                 embed_qu.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
@@ -141,7 +142,7 @@ class NeRank(nn.Module):
         for ind, qid in enumerate(qpos[1]):
             qid = int(qid)
             if qid:
-                lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+                lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
                 _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
                 embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
@@ -150,7 +151,7 @@ class NeRank(nn.Module):
         for ind, qid in enumerate(qpos[2]):
             qid = int(qid)
             if qid:
-                lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+                lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
                 _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
                 neg_embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
             else:
@@ -205,7 +206,7 @@ class NeRank(nn.Module):
 
         for ind, qid in enumerate(rank[3]):
             qid = int(qid)
-            lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+            lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
             _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
             emb_rank_q[ind] = torch.sum(lstm_last_hidden.data, dim=0)
         emb_rank_q = Variable(emb_rank_q)
