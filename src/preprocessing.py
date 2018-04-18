@@ -205,31 +205,42 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
     # Sort qid list, write to file by order of qid
     qid_list = sorted(list(qa_map.keys()),
                       key=lambda x: qa_map[x]['QuestionId'])
+
     total = len(qid_list)
-    sample_table = []
+    sample_table = set()
 
     #  Splitting the train and test at here!
     for qid in qa_map.keys():
-        acc_id = qa_map[qid]['AcceptedAnswerId']
-        if count_Q[qid] > threshold \
-            and count_A[acc_id] > threshold:
-            sample_table.append(qid)
+        if qid == "3199":
+            print("boom")
+        acc_ans_id = qa_map[qid]['AcceptedAnswerId']
+        if not acc_ans_id:
+            continue
+        for ans_id, aid in qa_map[qid]['AnswerOwnerList']:
+            if ans_id == acc_ans_id \
+                and count_Q[qid] >= threshold \
+                and count_A[aid] >= threshold:
+                sample_table.add(qid)
+            break
 
     #  Sample the test set and delete them from training.
-    test = np.random.choice(sample_table, size=int(total * prop_test))
-    for qid in test:
-        del qa_map[qid]
+    print(sample_table)
+    test = np.random.choice(list(sample_table), size=int(total * prop_test),
+                            replace=False)
+    print(test)
+    print(qa_map)
 
     with open(parsed_dir + OUTPUT_TEST, "w") as fout:
         for qid in test:
-            print("{} {} {}".format(qid, ), file=fout)
+            rid = qa_map[qid]['QuestionOwnerId']
+            accid = qa_map[qid]['AcceptedAnswerId']
+            print("{} {} {}".format(rid, qid, accid ), file=fout)
 
-
-
-
+    for qid in test:
+        del qa_map[qid]
     # Write QA pair to file
     with open(data_dir + OUTPUT, 'w') as fout:
-        for q in qid_list:
+        for q in qa_map.keys():
             fout.write(json.dumps(qa_map[q]) + "\n")
 
 
@@ -376,7 +387,7 @@ def extract_answer_score(data_dir, parsed_dir):
         parsed_dir - Output data dir
     """
     INPUT = "Posts_A.json"
-    OUTPUT = "a_score.txt"
+    OUTPUT = "A_score.txt"
 
     logger = logging.getLogger(__name__)
 
@@ -390,9 +401,7 @@ def extract_answer_score(data_dir, parsed_dir):
             try:
                 aid = data.get('Id')
                 score = data.get('Score')
-
-                print("{} {}".format(aid, score),
-                      file=fout)
+                print("{} {}".format(aid, score), file=fout)
             except:
                 logging.info("Error at Extracting answer score: "
                              + str(data))
@@ -465,7 +474,7 @@ def write_part_users(parsed_dir):
             print("{}".format(user_id), file=fout)
 
 
-def preprocess(dataset, threshold, prop_test):
+def preprocess_(dataset, threshold, prop_test):
     DATASET = dataset
     RAW_DIR = os.getcwd() + "/raw/{}/".format(DATASET)
     DATA_DIR= os.getcwd() + "/data/{}/".format(DATASET)
@@ -532,6 +541,6 @@ if __name__ == "__main__":
         print("\t Usage: {} [name of dataset]"
               .format(sys.argv[0]), file=sys.stderr)
         sys.exit(0)
-    threshold = 3
+    threshold = 1
     prop_test=0.1
-    preprocess(sys.argv[1], threshold, prop_test)
+    preprocess_(sys.argv[1], threshold, prop_test)

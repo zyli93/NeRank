@@ -21,7 +21,7 @@ from data_loader import DataLoader
 class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
                  batch_size, window_size, neg_sample_ratio,
-                 lstm_layers, include_content, lr):
+                 lstm_layers, include_content, lr, cnn_channel):
         self.dl = DataLoader(dataset=dataset,
                              include_content=include_content)
         self.embedding_dim = embedding_dim
@@ -32,8 +32,9 @@ class PDER:
         self.lstm_layers = lstm_layers
         self.learning_rate = lr
         self.model = NeRank(embedding_dim=self.embedding_dim,
-                     vocab_size=self.dl.user_count,
-                     lstm_layers=self.lstm_layers)  # TODO: fill in params
+                            vocab_size=self.dl.user_count,
+                            lstm_layers=self.lstm_layers,
+                            cnn_channel=cnn_channel)  # TODO: fill in params
 
     def train(self):
         dl = self.dl  # Rename the data loader
@@ -44,6 +45,8 @@ class PDER:
         if torch.cuda.is_available():  # Check availability of cuda
             model.cuda()
 
+        model.train()
+        # TODO: Other learning algorithms
         optimizer = optim.SGD(model.parameters(), lr=self.learning_rate)
 
         for epoch in range(self.epoch_num):
@@ -108,7 +111,8 @@ class PDER:
 
                 optimizer.zero_grad()
 
-                loss = model(rpos=rpos, apos=apos, qpos=qpos,
+                # loss and rank_loss, the later for evaluation
+                loss, _ = model(rpos=rpos, apos=apos, qpos=qpos,
                              rank=rank, nsample=nsample, dl=dl)
 
                 loss.backward()
@@ -127,6 +131,8 @@ class PDER:
         print("Optimization Finished!")
 
     def __validate(self):
+        self.model.eval()
+
         print()
 
     def test(self):

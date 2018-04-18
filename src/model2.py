@@ -22,16 +22,8 @@ class NeRank(nn.Module):
     Model class
 
     Heterogeneous Entity Embedding Based Recommendation
-
-    TODO:
-        - [ ] Parameters
-            - [ ] Check the initialization of embeddings
-        - [ ] Efficiency
-            - [ ] Run the model in parallel
-            - [ ] Move the model to CUDA
-        - [ ] Name
     """
-    def __init__(self, embedding_dim, vocab_size, lstm_layers):
+    def __init__(self, embedding_dim, vocab_size, lstm_layers, cnn_channel):
         super(NeRank, self).__init__()
         self.emb_dim = embedding_dim
         self.lstm_layers = lstm_layers
@@ -62,27 +54,27 @@ class NeRank(nn.Module):
                               bidirectional=True)
 
         # TODO: set up the size of the out_channel
-        self.out_cha = 32
+        self.out_channel = cnn_channel
         self.convnet1 = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(1, self.out_cha, kernel_size=(1, embedding_dim))),
+            ('conv1', nn.Conv2d(1, self.out_channel, kernel_size=(1, embedding_dim))),
             ('relu1', nn.ReLU()),
             ('pool1', nn.MaxPool2d(kernel_size=(3, 1)))
         ]))
 
         self.convnet2 = nn.Sequential(OrderedDict([
-            ('conv2', nn.Conv2d(1, self.out_cha, kernel_size=(2, embedding_dim))),
+            ('conv2', nn.Conv2d(1, self.out_channel, kernel_size=(2, embedding_dim))),
             ('relu2', nn.ReLU()),
             ('pool2', nn.MaxPool2d(kernel_size=(2, 1)))
         ]))
 
         self.convnet3 = nn.Sequential(OrderedDict([
-            ('conv3', nn.Conv2d(1, self.out_cha, kernel_size=(3, embedding_dim))),
+            ('conv3', nn.Conv2d(1, self.out_channel, kernel_size=(3, embedding_dim))),
             ('relu3', nn.ReLU())
         ]))
 
-        self.fc1 = nn.Linear(self.out_cha, 1)
-        self.fc2 = nn.Linear(self.out_cha, 1)
-        self.fc3 = nn.Linear(self.out_cha, 1)
+        self.fc1 = nn.Linear(self.out_channel, 1)
+        self.fc2 = nn.Linear(self.out_channel, 1)
+        self.fc3 = nn.Linear(self.out_channel, 1)
 
     def init_emb(self):
         """Initialize R and A embeddings"""
@@ -217,16 +209,17 @@ class NeRank(nn.Module):
         high_rank_mat = high_rank_mat.unsqueeze(1)
 
 
-        low_score = self.fc1(self.convnet1(low_rank_mat).view(-1, self.out_cha)) \
-                  + self.fc2(self.convnet2(low_rank_mat).view(-1, self.out_cha)) \
-                  + self.fc3(self.convnet3(low_rank_mat).view(-1, self.out_cha))
+        low_score = self.fc1(self.convnet1(low_rank_mat).view(-1, self.out_channel)) \
+                  + self.fc2(self.convnet2(low_rank_mat).view(-1, self.out_channel)) \
+                  + self.fc3(self.convnet3(low_rank_mat).view(-1, self.out_channel))
 
-        high_score = self.fc1(self.convnet1(high_rank_mat).view(-1, self.out_cha)) \
-                   + self.fc2(self.convnet2(high_rank_mat).view(-1, self.out_cha)) \
-                   + self.fc3(self.convnet3(high_rank_mat).view(-1, self.out_cha))
+        high_score = self.fc1(self.convnet1(high_rank_mat).view(-1, self.out_channel)) \
+                   + self.fc2(self.convnet2(high_rank_mat).view(-1, self.out_channel)) \
+                   + self.fc3(self.convnet3(high_rank_mat).view(-1, self.out_channel))
 
         rank_loss = torch.sum(low_score - high_score)
 
         loss = F.sigmoid(ne_loss) + F.sigmoid(rank_loss)
         print("The loss is {}".format(loss.data[0]))
-        return loss
+        return loss, rank_loss.data
+

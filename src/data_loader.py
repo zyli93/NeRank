@@ -45,7 +45,7 @@ class DataLoader():
         print("\tcreating qid embeddings map")
         self.qid2emb = self.__qid2embedding()
 
-        self.process = True  # todo: process manufacturing
+        self.process = True
 
         print("done!")
 

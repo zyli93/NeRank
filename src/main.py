@@ -1,5 +1,5 @@
 from generate_walk import MetaPathGenerator
-from preprocessing import preprocess
+from preprocessing import preprocess_
 from pder2 import PDER
 
 import os, sys
@@ -15,7 +15,9 @@ def runPDER(options):
         sys.exit()
 
     if options.preprocess:
-        preprocess(options.dataset)
+        preprocess_(dataset=options.dataset,
+                    threshold=options.test_threshold,
+                    prop_test=options.proportion_test)
 
     # preprocessing
     if options.gen_mp:
@@ -38,7 +40,8 @@ def runPDER(options):
         neg_sample_ratio=options.neg_ratio,
         lstm_layers=options.lstm_layers,
         include_content=options.include_content,
-        lr=options.learning_rate
+        lr=options.learning_rate,
+        cnn_channel=options.cnn.channel
     )
 
     pder_model.train()
@@ -48,6 +51,10 @@ def runPDER(options):
 
 if __name__ == '__main__':
     """Generating random walks and output to file
+    
+    [a, b, c, d, e, f, g, h, [i], [j], [k], 
+     l, m, n, o, p, [q], r, [s], t, u, [v],
+     [w], [x], y, [z]]
 
     Args:
         -d, --dataset (str)
@@ -142,6 +149,10 @@ if __name__ == '__main__':
     parser.add_option("-f", "--proportion-test", type="float",
                       dest="proportion_test", default=0.1,
                       help="The proportion of the test dataset.")
+
+    parser.add_option("-h", "--cnn-channel", type="int",
+                      dest="cnn_channel", default=32,
+                      help="How many channels for CNN intermediate output.")
 
 
     (options, args) = parser.parse_args()

@@ -22,14 +22,6 @@ class NeRank(nn.Module):
     Model class
 
     Heterogeneous Entity Embedding Based Recommendation
-
-    TODO:
-        - [ ] Parameters
-            - [ ] Check the initialization of embeddings
-        - [ ] Efficiency
-            - [ ] Run the model in parallel
-            - [ ] Move the model to CUDA
-        - [ ] Name
     """
     def __init__(self, embedding_dim, vocab_size, lstm_layers):
         super(NeRank, self).__init__()
