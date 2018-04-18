@@ -13,6 +13,7 @@
 import sys, os
 import re
 import logging
+import numpy as np
 from lxml import etree
 from bs4 import BeautifulSoup
 
@@ -27,6 +28,9 @@ except:
 
 part_user = set()
     # Users participated in Asking and Answering
+
+count_Q, count_A = {}, {}
+good_Q, good_A = [], []
 
 def clean_html(x):
     return BeautifulSoup(x, 'lxml').get_text()
@@ -130,7 +134,7 @@ def split_post(raw_dir, data_dir):
     return
 
 
-def process_QA(data_dir):
+def process_QA(parsed_dir, data_dir, threshold, prop_test):
     """Process QA
 
     Extract attributes used in this project
@@ -143,6 +147,7 @@ def process_QA(data_dir):
     POST_Q = "Posts_Q.json"
     POST_A = "Posts_A.json"
     OUTPUT = "QAU_Map.json"
+    OUTPUT_TEST = "test.txt"
 
     # Get logger to log exceptions
     logger = logging.getLogger(__name__)
@@ -163,13 +168,16 @@ def process_QA(data_dir):
                 qid, owner_id = data.get('Id', None), data.get('OwnerUserId', None)
                 acc_id = data.get('AcceptedAnswerId', None)
                 # Add to qa_map only when all three attributes are not None
-                if qid and owner_id and acc_id:
+                # if qid and owner_id and acc_id:
+                if qid and owner_id:
                     qa_map[qid] = {
                         'QuestionId': qid,
                         'QuestionOwnerId': owner_id,
                         'AcceptedAnswerId': acc_id,
                         'AnswerOwnerList': []
                     }
+                    # count how many questions an users asked
+                    count_Q[qid] = count_Q.get(qid, 0) + 1
             except:
                 logger.error("Error at process_QA 1: "+ str(data))
                 continue
@@ -184,6 +192,8 @@ def process_QA(data_dir):
                 entry = qa_map.get(par_id, None)
                 if aid and owner_id and par_id and entry:
                     entry['AnswerOwnerList'].append((aid, owner_id))
+                    # count the how many questions an answerer responded
+                    count_A[owner_id] = count_A.get(owner_id, 0) + 1
                 else:
                     logger.error("Answer {} belongs to unknown Question {} at Process QA"
                                  .format(aid, par_id))
@@ -194,7 +204,28 @@ def process_QA(data_dir):
 
     # Sort qid list, write to file by order of qid
     qid_list = sorted(list(qa_map.keys()),
-                      key= lambda x: qa_map[x]['QuestionId'])
+                      key=lambda x: qa_map[x]['QuestionId'])
+    total = len(qid_list)
+    sample_table = []
+
+    #  Splitting the train and test at here!
+    for qid in qa_map.keys():
+        acc_id = qa_map[qid]['AcceptedAnswerId']
+        if count_Q[qid] > threshold \
+            and count_A[acc_id] > threshold:
+            sample_table.append(qid)
+
+    #  Sample the test set and delete them from training.
+    test = np.random.choice(sample_table, size=int(total * prop_test))
+    for qid in test:
+        del qa_map[qid]
+
+    with open(parsed_dir + OUTPUT_TEST, "w") as fout:
+        for qid in test:
+            print("{} {} {}".format(qid, ), file=fout)
+
+
+
 
     # Write QA pair to file
     with open(data_dir + OUTPUT, 'w') as fout:
@@ -434,7 +465,7 @@ def write_part_users(parsed_dir):
             print("{}".format(user_id), file=fout)
 
 
-def preprocess(dataset):
+def preprocess(dataset, threshold, prop_test):
     DATASET = dataset
     RAW_DIR = os.getcwd() + "/raw/{}/".format(DATASET)
     DATA_DIR= os.getcwd() + "/data/{}/".format(DATASET)
@@ -460,7 +491,6 @@ def preprocess(dataset):
               .format(PARSED_DIR))
         os.makedirs(PARSED_DIR)
 
-
     if os.path.exists(DATA_DIR + "log.log"):
         os.remove(DATA_DIR + "log.log")
 
@@ -475,24 +505,19 @@ def preprocess(dataset):
     logger.addHandler(log_fh)
 
     # Split contest to question and answer
-    # print("Splitting Posts to Questions and Answers ...")
     split_post(raw_dir=RAW_DIR, data_dir=DATA_DIR)
 
     # Extract question-user, answer-user, and question-answer information
     # Generate Question and Answer/User map
-    # print("Generating Q-A maps ...")
-    process_QA(data_dir=DATA_DIR)
+    process_QA(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
+               threshold=threshold, prop_test=prop_test)
 
-    # print("Extracting Uq - Q pairs ...")
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    # print("Extracting Q - A, A - U pairs ...")
     extract_question_answer_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    # print("Extracting Q - Q Content, Title pairs ...")
     extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    # print("Extracting Answers' Scores ...")
     extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     extract_question_best_answerer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
@@ -507,4 +532,6 @@ if __name__ == "__main__":
         print("\t Usage: {} [name of dataset]"
               .format(sys.argv[0]), file=sys.stderr)
         sys.exit(0)
-    preprocess(sys.argv[1])
+    threshold = 3
+    prop_test=0.1
+    preprocess(sys.argv[1], threshold, prop_test)

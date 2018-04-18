@@ -61,10 +61,12 @@ if __name__ == '__main__':
         -n, --neg-ratio (float)
         -e, --embedding-dim (int)
         -y, --lstm-layers (int)
-        -p, --epoch-number (int)
+        -o, --epoch-number (int)
         -b, --batch-size (int)
         -u, --include-content (bool)
         -r, --learning-rate (float)
+        -t, --test-threshold (int)
+        -f, --proportion-test (float)
 
     Returns:
         do everything
@@ -132,6 +134,14 @@ if __name__ == '__main__':
     parser.add_option("-r", "--learning-rate", type="float",
                       dest="learning_rate", default=0.01,
                       help="The learning rate.")
+
+    parser.add_option("-t", "--test-threshold", type="int",
+                      dest="test_threshold", default=3,
+                      help="The threshold of an instant selected as test")
+
+    parser.add_option("-f", "--proportion-test", type="float",
+                      dest="proportion_test", default=0.1,
+                      help="The proportion of the test dataset.")
 
 
     (options, args) = parser.parse_args()

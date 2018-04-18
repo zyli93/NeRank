@@ -142,7 +142,7 @@ class DataLoader():
             self.sample_table,
             # first get a long neg sample list
             # then after separating entity, reshape to 3xlxh
-            size= int(npairs_in_batch * neg_ratio))
+            size=int(npairs_in_batch * neg_ratio))
 
         # why:
         #   instead of returning a mat, here it return a long np.array.
@@ -449,7 +449,6 @@ class DataLoader():
             qid  -  Hello
         """
         return self.qid2emb[qid]
-
 
 if __name__ == "__main__":
     test = DataLoader(dataset="3dprinting")
