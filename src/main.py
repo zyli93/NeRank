@@ -74,6 +74,7 @@ if __name__ == '__main__':
         -r, --learning-rate (float)
         -t, --test-threshold (int)
         -f, --proportion-test (float)
+        -v, --cnn-channel (int)
 
     Returns:
         do everything
@@ -150,7 +151,7 @@ if __name__ == '__main__':
                       dest="proportion_test", default=0.1,
                       help="The proportion of the test dataset.")
 
-    parser.add_option("-h", "--cnn-channel", type="int",
+    parser.add_option("-v", "--cnn-channel", type="int",
                       dest="cnn_channel", default=32,
                       help="How many channels for CNN intermediate output.")
 

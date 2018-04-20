@@ -123,6 +123,7 @@ def split_post(raw_dir, data_dir):
         parser = etree.iterparse(raw_dir + 'Posts.xml',
                                  events=('end',), tag='row')
         for event, elem in parser:
+
             attr = dict(elem.attrib)
             attr['Body'] = clean_html(attr['Body'])
 
@@ -146,8 +147,9 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
     """
     POST_Q = "Posts_Q.json"
     POST_A = "Posts_A.json"
-    OUTPUT = "QAU_Map.json"
+    OUTPUT = "QAU_Map_all.json"
     OUTPUT_TEST = "test.txt"
+    OUTPUT_TRAIN = "QAU_Map.json"
 
     # Get logger to log exceptions
     logger = logging.getLogger(__name__)
@@ -168,7 +170,6 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
                 qid, owner_id = data.get('Id', None), data.get('OwnerUserId', None)
                 acc_id = data.get('AcceptedAnswerId', None)
                 # Add to qa_map only when all three attributes are not None
-                # if qid and owner_id and acc_id:
                 if qid and owner_id:
                     qa_map[qid] = {
                         'QuestionId': qid,
@@ -177,7 +178,7 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
                         'AnswerOwnerList': []
                     }
                     # count how many questions an users asked
-                    count_Q[qid] = count_Q.get(qid, 0) + 1
+                    count_Q[owner_id] = count_Q.get(owner_id, 0) + 1
             except:
                 logger.error("Error at process_QA 1: "+ str(data))
                 continue
@@ -211,35 +212,42 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
 
     #  Splitting the train and test at here!
     for qid in qa_map.keys():
-        if qid == "3199":
-            print("boom")
         acc_ans_id = qa_map[qid]['AcceptedAnswerId']
+        rid = qa_map[qid]['QuestionOwnerId']
         if not acc_ans_id:
             continue
         for ans_id, aid in qa_map[qid]['AnswerOwnerList']:
             if ans_id == acc_ans_id \
-                and count_Q[qid] >= threshold \
+                and count_Q[rid] >= threshold \
                 and count_A[aid] >= threshold:
                 sample_table.add(qid)
             break
 
-    #  Sample the test set and delete them from training.
-    print(sample_table)
+    print("First print all QAU map")
+    with open(data_dir + OUTPUT, 'w') as fout:
+        for q in qa_map.keys():
+            fout.write(json.dumps(qa_map[q]) + "\n")
+
+    print("Length of the sample table is {}".format(len(sample_table)))
+    print("Sampling {} from the sample table".format(int(total * prop_test)))
     test = np.random.choice(list(sample_table), size=int(total * prop_test),
                             replace=False)
-    print(test)
-    print(qa_map)
 
+    print("Writing the sampled test set to disk")
     with open(parsed_dir + OUTPUT_TEST, "w") as fout:
         for qid in test:
             rid = qa_map[qid]['QuestionOwnerId']
             accid = qa_map[qid]['AcceptedAnswerId']
             print("{} {} {}".format(rid, qid, accid ), file=fout)
 
-    for qid in test:
-        del qa_map[qid]
+    # if qid is a test instance or qid doesn't have an answer
+    for qid in qid_list:
+        if qid in test or not len(qa_map[qid]['AnswerOwnerList']):
+            del qa_map[qid]
+
     # Write QA pair to file
-    with open(data_dir + OUTPUT, 'w') as fout:
+    print("Finally write the train QAU to disk")
+    with open(data_dir + OUTPUT_TRAIN, 'w') as fout:
         for q in qa_map.keys():
             fout.write(json.dumps(qa_map[q]) + "\n")
 
@@ -514,13 +522,16 @@ def preprocess_(dataset, threshold, prop_test):
     logger.addHandler(log_fh)
 
     # Split contest to question and answer
+    print("Spliting post")
     split_post(raw_dir=RAW_DIR, data_dir=DATA_DIR)
 
     # Extract question-user, answer-user, and question-answer information
     # Generate Question and Answer/User map
+    print("Processing QA")
     process_QA(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
                threshold=threshold, prop_test=prop_test)
 
+    
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     extract_question_answer_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
@@ -537,10 +548,10 @@ def preprocess_(dataset, threshold, prop_test):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 + 1:
+    if len(sys.argv) < 3 + 1:
         print("\t Usage: {} [name of dataset]"
               .format(sys.argv[0]), file=sys.stderr)
         sys.exit(0)
-    threshold = 1
-    prop_test=0.1
+    threshold = int(sys.argv[2])
+    prop_test = float(sys.argv[3])
     preprocess_(sys.argv[1], threshold, prop_test)

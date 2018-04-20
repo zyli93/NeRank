@@ -118,8 +118,13 @@ class MetaPathGenerator:
             start_entity_type = meta_pattern[0]
             start_node_list = self.get_nodelist(start_entity_type)
             for cnt in range(num_walks):  # Iterate the node set for cnt times
+                print("Count={}".format(cnt))
                 rand.shuffle(start_node_list)
-                for start_node in start_node_list:
+                total = len(start_node_list)                
+                for ind, start_node in enumerate(start_node_list):
+                    if ind % 3000 == 0:
+                        print("Finished {:.2f}".format(ind/total))
+
                     walks.append(
                         self.__meta_path_walk(
                             start=start_node,
@@ -194,7 +199,8 @@ class MetaPathGenerator:
         print("Writing Generated Meta-paths to files ...", end=" ")
 
         DATA_DIR = os.getcwd() + "/metapath/"
-        OUTPUT = DATA_DIR + self._dataset + ".txt"
+        OUTPUT = DATA_DIR + self._dataset + "_" \
+                + str(self._num_walks) + "_" + str(self._walk_length) + ".txt"
         if not os.path.exists(DATA_DIR):
             os.mkdir(DATA_DIR)
         with open(OUTPUT, "w") as fout:
@@ -204,8 +210,16 @@ class MetaPathGenerator:
         print("Done!")
 
 if __name__ == "__main__":
-    gw = MetaPathGenerator(length=15, num_walks=2, dataset="3dprinting")
-    walks = gw.generate_metapaths(patterns=["AQRQA", "AQA"], alpha=0)
+    if len(sys.argv) < 3 + 1:
+        print("\t Usage:{} [name of dataset], [length], [num_walk]"
+                .format(sys.argv[0], file=sys.stderr))
+        sys.exit(1)
+    dataset = sys.argv[1]
+    length = int(sys.argv[2])
+    num_walk = int(sys.argv[3])
+    
+    gw = MetaPathGenerator(length=length, num_walks=num_walk, dataset=dataset)
+    walks = gw.generate_metapaths(patterns=["AQRQA"], alpha=0)
     gw.write_metapaths(walks)
 
 
