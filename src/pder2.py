@@ -21,7 +21,9 @@ from data_loader import DataLoader
 class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
                  batch_size, window_size, neg_sample_ratio,
-                 lstm_layers, include_content, lr, cnn_channel):
+                 lstm_layers, include_content, lr, cnn_channel,
+                 test_prop, neg_test_ratio):
+
         self.dl = DataLoader(dataset=dataset,
                              include_content=include_content)
         self.embedding_dim = embedding_dim
@@ -31,6 +33,10 @@ class PDER:
         self.neg_sample_ratio = neg_sample_ratio
         self.lstm_layers = lstm_layers
         self.learning_rate = lr
+
+        self.test_prop = test_prop
+        self.neg_test_ratio = neg_test_ratio
+
         self.model = NeRank(embedding_dim=self.embedding_dim,
                             vocab_size=self.dl.user_count,
                             lstm_layers=self.lstm_layers,
@@ -113,7 +119,7 @@ class PDER:
 
                 # loss and rank_loss, the later for evaluation
                 loss, _ = model(rpos=rpos, apos=apos, qpos=qpos,
-                             rank=rank, nsample=nsample, dl=dl)
+                                rank=rank, nsample=nsample, dl=dl)
 
                 loss.backward()
                 optimizer.step()
@@ -131,9 +137,15 @@ class PDER:
         print("Optimization Finished!")
 
     def __validate(self):
-        self.model.eval()
+        model = self.model
+        model.eval()
+        tbatch = self.dl.build_test_batch(test_prop=self.test_prop,
+                                          test_neg_ratio=self.neg_sample_ratio)
+        # The format of tbatch is:
+        #   [aids], rid, qid, accid
+        for aid_list, rid, qid, accid in tbatch:
 
-        print()
+
 
     def test(self):
         print("Testing under construction.")

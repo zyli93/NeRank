@@ -13,6 +13,7 @@ import os, sys
 import gensim
 
 data_index = 0
+test_index = 0
 
 class DataLoader():
     def __init__(self, dataset, include_content):
@@ -39,11 +40,15 @@ class DataLoader():
         self.user_count = self.__create_uid_index()
 
         self.q2r, self.q2acc, self.q2a = {}, {}, {}
+        self.all_aid = []
         print("\tloading rqa ...")
         self.__load_rqa()
 
-        print("\tcreating qid embeddings map")
+        print("\tcreating qid embeddings map ...")
         self.qid2emb = self.__qid2embedding()
+
+        print("\tloading test sets ...")
+        self.testset = self.__load_test()
 
         self.process = True
 
@@ -368,6 +373,8 @@ class DataLoader():
         QACC_input = self.datadir + "Q_ACC_A.txt"
         QA_input = self.datadir + "Q_A.txt"
 
+        aid_set = set()
+
         with open(QR_input, "r") as fin:
             lines = fin.readlines()
             for line in lines:
@@ -384,10 +391,12 @@ class DataLoader():
             lines = fin.readlines()
             for line in lines:
                 Q, A = [int(x) for x in line.strip().split(" ")]
+                aid_set.add(A)
                 if Q not in self.q2a:
                     self.q2a[Q] = [A]
                 else:
                     self.q2a[Q].append(A)
+        self.all_aid = list(aid_set)
 
     def get_acc_ind(self, upos, vpos):
         """
@@ -449,6 +458,60 @@ class DataLoader():
             qid  -  Hello
         """
         return self.qid2emb[qid]
+
+    def __load_test(self):
+        """
+        Load test set into memory
+        The format of test file is :
+            rid, qid, accid
+
+        Return:
+            test  -  list of test triples
+        """
+        test_file = self.datadir + "test.txt"
+        test_set = []
+        with open(test_file, "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                rid, qid, accid = [int(x) for x in line.strip().split()]
+                test_set.append((rid, qid, accid))
+        return test_set
+
+    def build_test_batch(self, test_prop, test_neg_ratio):
+        """
+        Build a batch for test
+
+        Args:
+            test_prop       -  the ratio of data fed to test,
+                               if None, use all batch
+            test_neg_ratio  -  the ratio of negative test instances,
+                               expected to be an integer
+
+        Returns:
+            upos, vpos, npos, npairs_in_batch, aqr, accqr
+        """
+        total = len(self.testset)
+        if test_prop:
+            batch_size = int(total * test_prop)
+            batch = np.random.choice(self.testset, batch_size).tolist()
+        else:
+            batch = self.testset
+
+        test_batch = []
+        for test_sample in batch:
+            rid, qid, accaid = test_sample
+            alist = self.q2a[qid]
+            # Sample some negative
+            neg_alist = np.random.choice(self.all_aid,
+                                         test_neg_ratio * len(alist),
+                                         replace=False)
+            trank_a = []
+            for aid in alist + neg_alist:
+                trank_a.append(aid)
+            test_batch.append([trank_a, rid, qid, accaid])
+        return test_batch
+
+
 
 if __name__ == "__main__":
     test = DataLoader(dataset="3dprinting")
