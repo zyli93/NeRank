@@ -16,11 +16,13 @@ data_index = 0
 test_index = 0
 
 class DataLoader():
-    def __init__(self, dataset, include_content):
+    def __init__(self, dataset, include_content, mp_coverage, mp_length):
         print("initializing data_loader ...")
         self.dataset = dataset
         self.include_content = include_content
-        self.mpfile = os.getcwd() + "/metapath/"+ self.dataset +".txt"
+        self.mpfile = os.getcwd() \
+                + "/metapath/"+ self.dataset + "_" + str(mp_coverage) \
+                + "_" + str(mp_length) + ".txt" 
         self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
 
         print("\tloading dataset ...")

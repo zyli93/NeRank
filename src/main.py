@@ -5,6 +5,7 @@ from pder2 import PDER
 import os, sys
 from optparse import OptionParser
 
+os.environ["CUDA_VISIBLE_DEVICES"]="1,2,3"
 
 def runPDER(options):
 
@@ -41,9 +42,14 @@ def runPDER(options):
         lstm_layers=options.lstm_layers,
         include_content=options.include_content,
         lr=options.learning_rate,
-        cnn_channel=options.cnn.channel,
+        cnn_channel=options.cnn_channel,
         lambda_=options.lambda_,
-        prec_k=options.prec_k
+        prec_k=options.prec_k,
+        test_prop=options.proportion_test,
+        neg_test_ratio=options.neg_test_ratio,
+        mp_length=options.length,
+        mp_coverage=options.coverage
+
     )
 
     pder_model.train()
@@ -164,6 +170,10 @@ if __name__ == '__main__':
     parser.add_option("-k", "--precision_at_K", type="int",
                       dest="prec_k", default=3,
                       help="The hyperparam to test Precision@K.")
+    
+    parser.add_option("-x", "--neg_test_ratio", type="int",
+                      dest="neg_test_ratio", default=2,
+                      help="Random selected sample numbers in test batch")
 
 
     (options, args) = parser.parse_args()

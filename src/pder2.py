@@ -22,10 +22,13 @@ class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
                  batch_size, window_size, neg_sample_ratio,
                  lstm_layers, include_content, lr, cnn_channel,
-                 test_prop, neg_test_ratio, lambda_, prec_k):
+                 test_prop, neg_test_ratio, lambda_, prec_k,
+                 mp_length, mp_coverage):
 
         self.dl = DataLoader(dataset=dataset,
-                             include_content=include_content)
+                             include_content=include_content,
+                             mp_coverage=mp_coverage,
+                             mp_length=mp_length)
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
         self.window_size = window_size
@@ -53,15 +56,16 @@ class PDER:
         if torch.cuda.is_available():  # Check availability of cuda
             model.cuda()
 
-        model.train()
         # TODO: Other learning algorithms
         optimizer = optim.SGD(model.parameters(), lr=self.learning_rate)
 
         for epoch in range(self.epoch_num):
+            model.train()
             epoch_total_loss = 0
             dl.process = True
 
             iter = 0
+            print("check point 1, epoch", epoch)
 
             while dl.process:
                 print("Epoch-{}, Iteration-{}".format(epoch, iter), end="")
@@ -103,6 +107,8 @@ class PDER:
                 qnpos = Variable(torch.LongTensor(npos[2]))
                 qpos = [qupos, qvpos, qnpos]
 
+                print("check point 2, r,a,q done")
+
                 # aqr: R, A, Q
 
                 rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
@@ -110,6 +116,8 @@ class PDER:
                 rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))
                 rank_q = Variable(torch.LongTensor(aqr[:, 2]))
                 rank = [rank_r, rank_a, rank_acc, rank_q]
+
+                print("check point 3, rank done")
 
                 if torch.cuda.is_available():
                     rpos = [x.cuda() for x in rpos]
@@ -120,9 +128,10 @@ class PDER:
                 optimizer.zero_grad()
 
                 # loss and rank_loss, the later for evaluation
-                loss, _ = model(rpos=rpos, apos=apos, qpos=qpos,
+                loss = model(rpos=rpos, apos=apos, qpos=qpos,
                                 rank=rank, nsample=nsample, dl=dl,
                                 test_data=None)
+                print("check point 4, got loss")
 
                 loss.backward()
                 optimizer.step()
@@ -134,7 +143,7 @@ class PDER:
                 # torch.save(model.state_dict(), "path here")
 
             print("Epoch-{:d} Loss sum: {}".format(epoch, epoch_total_loss))
-
+            model.eval()
             MRR, pak = self.__validate()
             print("Validation at Epoch-{:d}, \n\tMRR-{:.5f}, Precision@{:d}-{:.5f}"
                   .format(epoch, MRR, self.prec_k, pak))
@@ -145,9 +154,8 @@ class PDER:
     def __validate(self):
         dl = self.dl
         model = self.model
-        model.eval()
         tbatch = dl.build_test_batch(test_prop=self.test_prop,
-                                          test_neg_ratio=self.neg_sample_ratio)
+                                     test_neg_ratio=self.neg_test_ratio)
         MRR, prec_K = 0, 0
         tbatch_len = len(tbatch)
 
