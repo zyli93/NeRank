@@ -22,7 +22,7 @@ class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
                  batch_size, window_size, neg_sample_ratio,
                  lstm_layers, include_content, lr, cnn_channel,
-                 test_prop, neg_test_ratio):
+                 test_prop, neg_test_ratio, lambda_, prec_k):
 
         self.dl = DataLoader(dataset=dataset,
                              include_content=include_content)
@@ -35,17 +35,19 @@ class PDER:
         self.learning_rate = lr
 
         self.test_prop = test_prop
+        self.prec_k = prec_k
         self.neg_test_ratio = neg_test_ratio
 
         self.model = NeRank(embedding_dim=self.embedding_dim,
                             vocab_size=self.dl.user_count,
                             lstm_layers=self.lstm_layers,
-                            cnn_channel=cnn_channel)  # TODO: fill in params
+                            cnn_channel=cnn_channel,
+                            lambda_=lambda_)  # TODO: fill in params
 
     def train(self):
         dl = self.dl  # Rename the data loader
         model = self.model
-        if torch.cuda.device_count() < 1:
+        if torch.cuda.device_count() > 1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
             model = nn.DataParallel(model)
         if torch.cuda.is_available():  # Check availability of cuda
@@ -119,7 +121,8 @@ class PDER:
 
                 # loss and rank_loss, the later for evaluation
                 loss, _ = model(rpos=rpos, apos=apos, qpos=qpos,
-                                rank=rank, nsample=nsample, dl=dl)
+                                rank=rank, nsample=nsample, dl=dl,
+                                test_data=None)
 
                 loss.backward()
                 optimizer.step()
@@ -132,19 +135,41 @@ class PDER:
 
             print("Epoch-{:d} Loss sum: {}".format(epoch, epoch_total_loss))
 
-            self.__validate()
+            MRR, pak = self.__validate()
+            print("Validation at Epoch-{:d}, \n\tMRR-{:.5f}, Precision@{:d}-{:.5f}"
+                  .format(epoch, MRR, self.prec_k, pak))
+
 
         print("Optimization Finished!")
 
     def __validate(self):
+        dl = self.dl
         model = self.model
         model.eval()
-        tbatch = self.dl.build_test_batch(test_prop=self.test_prop,
+        tbatch = dl.build_test_batch(test_prop=self.test_prop,
                                           test_neg_ratio=self.neg_sample_ratio)
+        MRR, prec_K = 0, 0
+        tbatch_len = len(tbatch)
+
         # The format of tbatch is:
         #   [aids], rid, qid, accid
         for aid_list, rid, qid, accid in tbatch:
+            rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
+            rep_rid = [rid] * len(aid_list)
+            rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
+            if torch.cuda.is_available():
+                rank_a = rank_a.cuda()
+                rank_r = rank_r.cuda()
+            score = model(rpos=None, apos=None, qpos=None,
+                          rank=None, nsample=None, dl=dl,
+                          test_data=[rank_a, rank_r, qid], train=False)
+            RR, prec = dl.perform_metric(aid_list, score.tolist(),
+                                         accid, self.prec_k)
+            MRR += RR
+            prec_K += prec
 
+        MRR, prec_K= MRR / len(tbatch_len), prec_K / len(tbatch_len)
+        return MRR, prec_K
 
 
     def test(self):

@@ -23,10 +23,12 @@ class NeRank(nn.Module):
 
     Heterogeneous Entity Embedding Based Recommendation
     """
-    def __init__(self, embedding_dim, vocab_size, lstm_layers, cnn_channel):
+    def __init__(self, embedding_dim, vocab_size, lstm_layers,
+                 cnn_channel, lambda_):
         super(NeRank, self).__init__()
         self.emb_dim = embedding_dim
         self.lstm_layers = lstm_layers
+        self.lambda_=lambda_
 
         self.ru_embeddings = nn.Embedding(vocab_size,
                                           embedding_dim,
@@ -45,12 +47,10 @@ class NeRank(nn.Module):
         self.ubirnn = nn.LSTM(input_size=embedding_dim,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
-                              # batch_first=True,
                               bidirectional=True)
         self.vbirnn = nn.LSTM(input_size=embedding_dim,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
-                              # batch_first=True,
                               bidirectional=True)
 
         # TODO: set up the size of the out_channel
@@ -220,16 +220,18 @@ class NeRank(nn.Module):
 
             rank_loss = torch.sum(low_score - high_score)
 
-            loss = F.sigmoid(ne_loss) + F.sigmoid(rank_loss)
+            loss = F.sigmoid(ne_loss) + self.lambda_ * F.sigmoid(rank_loss)
             print("The loss is {}".format(loss.data[0]))
             return loss, rank_loss.data
         else:
             test_a, test_r, test_q = test_data
             a_size = len(test_a)
+
+            # The test_a and test_r are vectors
             emb_rank_a = self.au_embeddings(test_a)
             emb_rank_r = self.au_embeddings(test_r)
 
-            # only need one
+            # However, the test_q is an int, only one is needed
             lstm_input = Variable(torch.FloatTensor(dl.q2emb(test_q)).unsqueeze(1).cuda())
             _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
             lstm_last_hidden = torch.sum(dim=0).squeeze()
@@ -239,7 +241,5 @@ class NeRank(nn.Module):
                   + self.fc2(self.convnet2(emb_rank_mat).view(-1, self.out_channel)) \
                   + self.fc3(self.convnet3(emb_rank_mat).view(-1, self.out_channel))
 
-            # TODO: finish the ordering
-
-
-
+            print("Test score shape", score.shape)
+            return score.squeeze()

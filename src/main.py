@@ -41,7 +41,9 @@ def runPDER(options):
         lstm_layers=options.lstm_layers,
         include_content=options.include_content,
         lr=options.learning_rate,
-        cnn_channel=options.cnn.channel
+        cnn_channel=options.cnn.channel,
+        lambda_=options.lambda_,
+        prec_k=options.prec_k
     )
 
     pder_model.train()
@@ -52,9 +54,9 @@ def runPDER(options):
 if __name__ == '__main__':
     """Generating random walks and output to file
     
-    [a, b, c, d, e, f, g, h, [i], [j], [k], 
+    [a, b, c, d, e, f, g, h, [i], [j], k, 
      l, m, n, o, p, [q], r, [s], t, u, [v],
-     [w], [x], y, [z]]
+     [w], [x], y, z]
 
     Args:
         -d, --dataset (str)
@@ -154,6 +156,14 @@ if __name__ == '__main__':
     parser.add_option("-v", "--cnn-channel", type="int",
                       dest="cnn_channel", default=32,
                       help="How many channels for CNN intermediate output.")
+
+    parser.add_option("-z", "--lambda", type="float",
+                      dest="lambda_", default=1.0,
+                      help="The hyperparam between NE loss and Rank loss.")
+
+    parser.add_option("-k", "--precision_at_K", type="int",
+                      dest="prec_k", default=3,
+                      help="The hyperparam to test Precision@K.")
 
 
     (options, args) = parser.parse_args()

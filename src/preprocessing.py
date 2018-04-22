@@ -218,8 +218,8 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
             continue
         for ans_id, aid in qa_map[qid]['AnswerOwnerList']:
             if ans_id == acc_ans_id \
-                and count_Q[rid] >= threshold \
-                and count_A[aid] >= threshold:
+                    and count_Q[rid] >= threshold \
+                    and count_A[aid] >= threshold:
                 sample_table.add(qid)
             break
 

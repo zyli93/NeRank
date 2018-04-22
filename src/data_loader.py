@@ -488,7 +488,11 @@ class DataLoader():
                                expected to be an integer
 
         Returns:
-            upos, vpos, npos, npairs_in_batch, aqr, accqr
+            A list of test data, formatted as follows:
+                trank_a - a list of answers (vector)
+                rid - the raiser ID (scalar)
+                qid - the question ID (scalar)
+                accaid - the accepted answer owner ID (scaler)
         """
         total = len(self.testset)
         if test_prop:
@@ -511,6 +515,25 @@ class DataLoader():
             test_batch.append([trank_a, rid, qid, accaid])
         return test_batch
 
+    def perform_metric(self, aid_list, score_list, accid, k):
+        """
+        Performance metric evaluation
+
+        Args:
+            aid_list  -  the list of aid in this batch
+            score_list  -  the list of score of ranking
+            accid  -  the ground truth
+            k  -  precision at K
+        """
+        if len(aid_list) != len(score_list):
+            print("aid_list and score_list not equal length.",
+                  file=sys.stderr)
+            sys.exit()
+        id_score_pair = list(zip(aid_list, score_list))
+        id_score_pair.sort(key=lambda x: x[1], reverse=True)
+        for ind, (aid, score) in id_score_pair:
+            if aid == accid:
+                return 1/(ind+1), int(ind < k)
 
 
 if __name__ == "__main__":
