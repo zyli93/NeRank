@@ -130,6 +130,7 @@ class NeRank(nn.Module):
                 if qid:
                     # lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
                     lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
+                    self.ubirnn.flatten_parameters()
                     _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
                     embed_qu.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
                 else:
@@ -139,6 +140,7 @@ class NeRank(nn.Module):
                 qid = int(qid)
                 if qid:
                     lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
+                    self.vbirnn.flatten_parameters()
                     _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
                     embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
                 else:
@@ -187,6 +189,8 @@ class NeRank(nn.Module):
                 In : LongTensor(N,M)
                 Out: (N, W, embedding_dim)
             """
+            print(neg_embed_v.shape)
+            print(embed_u.unsqueeze(2).shape)
             neg_score = torch.bmm(neg_embed_v, embed_u.unsqueeze(2)).squeeze()
             neg_score = torch.sum(neg_score)
             sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()

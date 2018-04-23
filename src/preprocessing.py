@@ -17,8 +17,11 @@ import numpy as np
 from lxml import etree
 from bs4 import BeautifulSoup
 
+import nltk
+nltk.data.path.append("/workspace/nltk_data")
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+
 import string
 
 try:
