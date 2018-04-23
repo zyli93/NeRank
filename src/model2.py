@@ -42,18 +42,17 @@ class NeRank(nn.Module):
                                           sparse=False)
         self.init_emb()
 
-        self.ubirnn = nn.LSTM(input_size=embedding_dim,
+        self.ubirnn = nn.LSTM(input_size=300,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
                               batch_first=True,
-                              bidirectional=True)
-        self.vbirnn = nn.LSTM(input_size=embedding_dim,
+                              bidirectional=False)
+        self.vbirnn = nn.LSTM(input_size=300,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
                               batch_first=True,
-                              bidirectional=True)
+                              bidirectional=False)
 
-        # TODO: set up the size of the out_channel
         self.out_channel = cnn_channel
         self.convnet1 = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(1, self.out_channel, kernel_size=(1, embedding_dim))),
@@ -86,9 +85,11 @@ class NeRank(nn.Module):
         self.ru_embeddings.weight.data[0].zero_()
         self.av_embeddings.weight.data.uniform_(-0, 0)
 
-    def init_hc(self):
-        h = Variable(torch.zeros(self.lstm_layers * 2, 1, self.emb_dim))
-        c = Variable(torch.zeros(self.lstm_layers * 2, 1, self.emb_dim))
+    def init_hc(self, batch_size):
+        h = Variable(
+                torch.zeros(self.lstm_layers, batch_size, self.emb_dim))
+        c = Variable(
+                torch.zeros(self.lstm_layers, batch_size, self.emb_dim))
         if torch.cuda.is_available():
             (h, c) = (h.cuda(), c.cuda())
         return h, c
@@ -115,15 +116,21 @@ class NeRank(nn.Module):
             # wc: word concatenate
             quinput, qvinput, qninput = qinfo[:3]
             qulen, qvlen, qnlen = qinfo[3:]
+            print("qinput shape: u,v,n", 
+                    quinput.shape, qvinput.shape, qninput.shape)
 
             # First, pad 0 at left
             # Second, expand the qxlen
             # Third, apply gather
 
             # Note: lstm output shape: B x Seq_len x (hidden_size * #_dir)
-            u_output, _ = self.ubirnn(quinput, self.init_hc())
-            v_output, _ = self.vbirnn(qvinput, self.init_hc())
-            n_output, _ = self.vbirnn(qninput, self.init_hc())
+
+            
+            
+            u_output, _ = self.ubirnn(quinput, self.init_hc(nsample))
+            v_output, _ = self.vbirnn(qvinput, self.init_hc(nsample))
+            n_output, _ = self.vbirnn(qninput, 
+                    self.init_hc(qninput.size(0)))
 
             u_pad = Variable(torch.zeros(u_output.size(0), 1, u_output.size(2)))
             v_pad = Variable(torch.zeros(v_output.size(0), 1, v_output.size(2)))
@@ -143,6 +150,8 @@ class NeRank(nn.Module):
             qvlen = qvlen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
             qnlen = qnlen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
 
+            print("uoutput, qulen shape",
+                    u_output.shape, qulen.shape)
             embed_qu = u_output.gather(1, qulen.detach())
             embed_qv = v_output.gather(1, qvlen.detach())
             neg_embed_qv = n_output.gather(1, qnlen.detach())
@@ -189,15 +198,19 @@ class NeRank(nn.Module):
 
             print("LSTM embedding done")
 
-            embed_u = embed_ru + embed_au + embed_qu
-            embed_v = embed_rv + embed_av + embed_qv
+            print("embed_u shape", embed_ru.shape, embed_au.shape, embed_qu.shape)
+
+            embed_u = embed_ru + embed_au + embed_qu.squeeze()
+            embed_v = embed_rv + embed_av + embed_qv.squeeze()
 
             score = torch.mul(embed_u, embed_v)
             score = torch.sum(score)
 
             log_target = F.logsigmoid(score).squeeze()
 
-            neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv
+            neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv.squeeze()
+            print("neg shape",
+                    neg_embed_av.shape, neg_embed_rv.shape, neg_embed_qv.shape)
             neg_embed_v = neg_embed_v.view(nsample, -1, self.emb_dim)
 
             """
@@ -241,11 +254,12 @@ class NeRank(nn.Module):
             emb_rank_acc = self.au_embeddings(rank[2])
             rank_q, rank_q_len = rank[3], rank[4]
 
-            rank_q_output, _ = self.ubirnn(rank_q, self.init_hc())
+            rank_q_output, _ = self.ubirnn(
+                    rank_q, self.init_hc(rank_q.size(0)))
             rank_q_pad = Variable(torch.zeros(
                 rank_q_output.size(0), 1, rank_q_output.size(2))).cuda()
-            rank_q_output = torch.cat((rank_q_pad, rank_q_output))
-            rank_q_len = rank_q_len.unsqueeze(1).expand(-1, self.emb_dim).unsquueze(1)
+            rank_q_output = torch.cat((rank_q_pad, rank_q_output), 1)
+            rank_q_len = rank_q_len.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
             emb_rank_q = rank_q_output.gather(1, rank_q_len.detach())
 
             """
@@ -259,9 +273,13 @@ class NeRank(nn.Module):
             # emb_rank_q = Variable(emb_rank_q)
             """
 
-            low_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a], dim=1)
+            print("low rank mat shape", 
+                    emb_rank_r.shape, emb_rank_q.shape, emb_rank_a.shape)
+            low_rank_mat = torch.stack(
+                    [emb_rank_r, emb_rank_q.squeeze(), emb_rank_a], dim=1)
             low_rank_mat = low_rank_mat.unsqueeze(1)
-            high_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_acc], dim=1)
+            high_rank_mat = torch.stack(
+                    [emb_rank_r, emb_rank_q.squeeze(), emb_rank_acc], dim=1)
             high_rank_mat = high_rank_mat.unsqueeze(1)
 
             low_score = self.fc1(self.convnet1(low_rank_mat).view(-1, self.out_channel)) \
@@ -285,7 +303,8 @@ class NeRank(nn.Module):
             emb_rank_a = self.au_embeddings(test_a)
             emb_rank_r = self.au_embeddings(test_r)
 
-            test_q_output, _ = self.ubirnn(test_q.unsqueeze(0), self.init_hc())
+            test_q_output, _ = self.ubirnn(
+                    test_q.unsqueeze(0), self.init_hc(1))
 
             test_q_target_output = torch.index_select(
                 test_q_output.squeeze(), 0, torch.LongTensor(test_q_len))

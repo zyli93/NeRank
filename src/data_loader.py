@@ -48,7 +48,8 @@ class DataLoader():
         self.__load_rqa()
 
         print("\tcreating qid embeddings map ...")
-        self.qid2emb, self.qid2len = self.__qid2embedding()
+        self.qid2emb, self.qid2len = {}, {}
+        self.__qid2embedding()
 
         print("\tloading test sets ...")
         self.testset = self.__load_test()
@@ -225,56 +226,20 @@ class DataLoader():
             q_len  -  the length of that question
         """
         q_len = 0
+        qvecs = [[0.0] * 300 for _ in range(self.PAD_LEN)]
         if qid:
             question = self.qid2sen[qid]
             question = [x for x in question.strip().split(" ")
                           if x in self.w2vmodel.vocab]
-            if not question:
-                # qvecs = np.random.random(300).reshape((1, 300))
-                qvecs = [[0.0] * 300 for _ in range(self.PAD_LEN)]
-            else:
-                qvecs = list(self.w2vmodel[question])
+            if question:
+                qvecs = self.w2vmodel[question].tolist()
                 q_len = len(question)
                 if q_len > self.PAD_LEN:
                     qvecs = qvecs[:self.PAD_LEN]
                 else:
                     pad_size = self.PAD_LEN - q_len
                     qvecs += [[0.0] * 300 for _ in range(pad_size)]
-        else:
-            qvecs = [[0.0] * 300 for _ in range(self.PAD_LEN)]
-        return qvecs, q_len
-
-    def qtc(self, qid):
-        return self.__qid_to_concatenate_emb(qid)
-
-    def qid2vec(self, vec):
-        """
-        Vector qid to a vector of concatenated word embeddings
-
-        Args:
-            vec  -  the vector of qids to deal with
-
-        Return:
-            the list of concatenated word embeddings.
-            Each element should be variant in sizes.
-        """
-        vfunc = np.vectorize(lambda x: self.__qid_to_concatenate_emb(x))
-        return vfunc(vec)
-
-    def sen2vecs(self, sentence):
-        """
-        ** [NOT in USE] **
-        Convert sentence to concatenate of word-vectors
-
-        Arg:
-            sentence  -  str, the sentence to convert
-
-        Return:
-            (np.array)  -  the array contains the word vectors
-        """
-        sentence = sentence.split(" ")
-        vectors = [self.w2vmodel[w] for w in sentence]
-        return len(sentence), np.array(vectors)
+        return q_len, qvecs
 
     def __load_word2vec(self):
         """
@@ -338,14 +303,6 @@ class DataLoader():
                 self.uid2ind[uid] = ind
                 self.ind2uid[ind] = uid
             return len(lines)
-
-    def single_uid2index(self, uid):
-        """ NOT IN USE"""
-        return self.uid2ind[uid]
-
-    def single_index2uid(self, index):
-        """NOT IN USE"""
-        return self.ind2uid[index]
 
     def uid2index(self, vec):
         """
@@ -458,19 +415,33 @@ class DataLoader():
         Return:
             qid2emb  -  the loaded map
         """
-        qid2emb, qid2len = {}, {}
         for qid in self.q2r.keys():
-            qid2emb[qid], qid2len[qid] = self.__qid_to_concatenate_emb(qid)
-        return qid2emb, qid2len
+            qlen, qvecs = self.__qid_to_concatenate_emb(qid)
+            self.qid2emb[qid] = qvecs
+            self.qid2len[qid] = qlen
+        (zero_len, zero_vecs) = self.__qid_to_concatenate_emb(0)
+        self.qid2emb[0] = zero_vecs
+        self.qid2len[0] = zero_len 
+        print("Print in __qid2embedding, size of self.qid2emb[16]",
+                len(self.qid2emb[16]))
+        print("Print in __qid2embedding, size of self.qid2emb[16][0]",
+                len(self.qid2emb[16][0]))
 
     def q2emb(self, qid):
         """
         Getter func of qid2emb
-        NOT IN USE
         Args:
             qid  -  Hello
         """
-        return self.qid2emb[qid], self.qid2len[qid]
+        return self.qid2emb[qid]
+    
+    def q2len(self, qid):
+        """
+        Getter func of qid2len
+        Args:
+            qid  - Hello
+        """
+        return self.qid2len[qid]
 
     def __load_test(self):
         """
@@ -495,7 +466,7 @@ class DataLoader():
         Build a batch for test
 
         Args:
-            test_prop       -  the ratio of data fed to test,
+            test_prop      -  the ratio of data fed to test,
                                if None, use all batch
             test_neg_ratio  -  the ratio of negative test instances,
                                expected to be an integer
@@ -557,14 +528,20 @@ class DataLoader():
             qid_list  -  the list of qid
         Returns:
             padded array  -  the padded array
-            len_list  -  the list of length used for gather
         """
-        qvecs, qlens = [], []
-        for qid in range(qid_list):
-            qvecs.append(self.qid2emb[qid])
-            qlens.append(self.qid2len[qid])
-        return qvecs, qlens
+        qvecs = [self.qid2emb[qid] for qid in qid_list]
+        return qvecs
 
+    def qid2vec_len(self, qid_list):
+        """
+        Convert qid list to list of len
+        Args:
+            qid_list  -  the list of qid
+        Returns:
+            len array  -  the list of len
+        """
+        qlens = [self.qid2len[qid] for qid in qid_list]
+        return qlens
 
 if __name__ == "__main__":
     test = DataLoader(dataset="3dprinting")

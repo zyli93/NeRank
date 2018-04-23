@@ -50,7 +50,7 @@ class PDER:
     def train(self):
         dl = self.dl  # Rename the data loader
         model = self.model
-        if torch.cuda.device_count() > 1:
+        if torch.cuda.device_count() < 1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
             model = nn.DataParallel(model)
         if torch.cuda.is_available():  # Check availability of cuda
@@ -107,10 +107,16 @@ class PDER:
                 # qnpos = Variable(torch.LongTensor(npos[2]))
                 # qpos = [qupos, qvpos, qnpos]
 
-                qu_wc, qulen = dl.qid2vec_padded(upos[2])
-                qv_wc, qvlen = dl.qid2vec_padded(vpos[2])
-                qn_wc, qnlen = dl.qid2vec_padded(npos[2])
+                qu_wc = dl.qid2vec_padded(upos[2])
+                qv_wc = dl.qid2vec_padded(vpos[2])
+                qn_wc = dl.qid2vec_padded(npos[2])
+
+                qulen = dl.qid2vec_len(upos[2])
+                qvlen = dl.qid2vec_len(vpos[2])
+                qnlen = dl.qid2vec_len(npos[2])
+
                 qu_wc = Variable(torch.FloatTensor(qu_wc).view(-1, dl.PAD_LEN, 300))
+                print(qu_wc.shape)
                 qv_wc = Variable(torch.FloatTensor(qv_wc).view(-1, dl.PAD_LEN, 300))
                 qn_wc = Variable(torch.FloatTensor(qn_wc).view(-1, dl.PAD_LEN, 300))
                 qulen = Variable(torch.LongTensor(qulen))
@@ -126,7 +132,8 @@ class PDER:
                 rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
                 rank_a = Variable(torch.LongTensor(dl.uid2index(aqr[:, 1])))
                 rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))
-                rank_q_wc, rank_q_len = dl.qid2vec_padded(aqr[:, 2])
+                rank_q_wc= dl.qid2vec_padded(aqr[:, 2])
+                rank_q_len = dl.qid2vec_len(aqr[:, 2])
                 rank_q = Variable(torch.FloatTensor(rank_q_wc).view(-1, dl.PAD_LEN, 300))
                 rank_q_len = Variable(torch.LongTensor(rank_q_len))
 
