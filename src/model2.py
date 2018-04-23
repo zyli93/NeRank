@@ -47,10 +47,12 @@ class NeRank(nn.Module):
         self.ubirnn = nn.LSTM(input_size=embedding_dim,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
+                              batch_first=True,
                               bidirectional=True)
         self.vbirnn = nn.LSTM(input_size=embedding_dim,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
+                              batch_first=True,
                               bidirectional=True)
 
         # TODO: set up the size of the out_channel
@@ -93,14 +95,7 @@ class NeRank(nn.Module):
             (h, c) = (h.cuda(), c.cuda())
         return h, c
 
-    def forward(self, rpos, apos, qpos, rank, nsample, dl, test_data, train=True):
-        """
-        forward algorithm for NeRank,
-        quloc, qvloc, qnloc are locations in a vector of u, v,
-            and negative samples where there is a question text.
-        quemb, qvemb, qnemb are the word embedding piles of that
-        """
-
+    def forward(self, rpos, apos, qinfo, rank, nsample, dl, test_data, train=True):
         """
             - Get all embeddings
                 - r, a
@@ -120,22 +115,17 @@ class NeRank(nn.Module):
             neg_embed_av = self.av_embeddings(apos[2])
 
             # wc: word concatenate
-            q_input_u = Variable(torch.FloatTensor(wvq[0]).view(-1, dl.PAD_LEN, 300))
-            q_input_v = Variable(torch.FloatTensor(wvq[1]).view(-1, dl.PAD_LEN, 300))
-            q_len_u = Variable(torch.LongTensor(qlen[0]))
-            q_len_v = Variable(torch.LongTensor(qlen[1]))
+            quinput, qvinput, qninput = qinfo[:3]
+            qulen, qvlen, qnlen = qinfo[3:]
+
+            u_output, _ = self.ubirnn(quinput, self.init_hc())
+            v_output, _ = self.vbirnn(qvinput, self.init_hc())
+            n_output, _ = self.vbirnn(qninput, self.init_hc())
 
 
 
 
 
-
-
-
-
-
-
-            output, _ = self.ubirnn()
 
             """
             # embed_qu = Variable(torch.zeros((qpos[0].shape[0], self.emb_dim)).cuda())

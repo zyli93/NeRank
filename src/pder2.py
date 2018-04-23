@@ -107,7 +107,17 @@ class PDER:
                 # qnpos = Variable(torch.LongTensor(npos[2]))
                 # qpos = [qupos, qvpos, qnpos]
 
+                qu_wc, qulen = dl.qid2vec_padded(upos[2])
+                qv_wc, qvlen = dl.qid2vec_padded(vpos[2])
+                qn_wc, qnlen = dl.qid2vec_padded(npos[2])
+                qu_wc = Variable(torch.FloatTensor(qu_wc).view(-1, dl.PAD_LEN, 300))
+                qv_wc = Variable(torch.FloatTensor(qv_wc).view(-1, dl.PAD_LEN, 300))
+                qn_wc = Variable(torch.FloatTensor(qn_wc).view(-1, dl.PAD_LEN, 300))
+                qulen = Variable(torch.LongTensor(qulen))
+                qvlen = Variable(torch.LongTensor(qvlen))
+                qnlen = Variable(torch.LongTensor(qnlen))
 
+                qinfo = [qu_wc, qv_wc, qn_wc, qulen, qvlen, qnlen]
 
                 print("check point 2, r,a,q done")
 
@@ -116,23 +126,29 @@ class PDER:
                 rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
                 rank_a = Variable(torch.LongTensor(dl.uid2index(aqr[:, 1])))
                 rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))
-                rank_q = Variable(torch.LongTensor(aqr[:, 2]))
-                rank = [rank_r, rank_a, rank_acc, rank_q]
+                rank_q_wc, rank_q_len = dl.qid2vec_padded(aqr[:, 2])
+                rank_q = Variable(torch.FloatTensor(rank_q_wc).view(-1, dl.PAD_LEN, 300))
+                rank_q_len = Variable(torch.LongTensor(rank_q_len))
+
+                # rank_q = Variable(torch.LongTensor(aqr[:, 2]))
+                rank = [rank_r, rank_a, rank_acc, rank_q, rank_q_len]
 
                 print("check point 3, rank done")
 
                 if torch.cuda.is_available():
                     rpos = [x.cuda() for x in rpos]
                     apos = [x.cuda() for x in apos]
-                    qpos = [x.cuda() for x in qpos]
+                    # qpos = [x.cuda() for x in qpos]
+                    qinfo = [x.cuda() for x in qinfo]
                     rank = [x.cuda() for x in rank]
 
                 optimizer.zero_grad()
 
                 # loss and rank_loss, the later for evaluation
-                loss = model(rpos=rpos, apos=apos, qpos=qpos,
-                                rank=rank, nsample=nsample, dl=dl,
-                                test_data=None)
+                loss = model(rpos=rpos, apos=apos, qinfo=qinfo,
+                             # qpos=qpos,
+                             rank=rank, nsample=nsample, dl=dl,
+                             test_data=None)
                 print("check point 4, got loss")
 
                 loss.backward()
