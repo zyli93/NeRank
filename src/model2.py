@@ -12,8 +12,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from data_loader import DataLoader
-
 from collections import OrderedDict
 
 
@@ -118,14 +116,38 @@ class NeRank(nn.Module):
             quinput, qvinput, qninput = qinfo[:3]
             qulen, qvlen, qnlen = qinfo[3:]
 
+            # First, pad 0 at left
+            # Second, expand the qxlen
+            # Third, apply gather
+
+            # Note: lstm output shape: B x Seq_len x (hidden_size * #_dir)
             u_output, _ = self.ubirnn(quinput, self.init_hc())
             v_output, _ = self.vbirnn(qvinput, self.init_hc())
             n_output, _ = self.vbirnn(qninput, self.init_hc())
 
+            u_pad = Variable(torch.zeros(u_output.size(0), 1, u_output.size(2)))
+            v_pad = Variable(torch.zeros(v_output.size(0), 1, v_output.size(2)))
+            n_pad = Variable(torch.zeros(n_output.size(0), 1, n_output.size(2)))
+
+            if torch.cuda.is_available():
+                u_pad = u_pad.cuda()
+                v_pad = v_pad.cuda()
+                n_pad = n_pad.cuda()
 
 
+            u_output = torch.cat((u_pad, u_output), 1)
+            v_output = torch.cat((v_pad, v_output), 1)
+            n_output = torch.cat((n_pad, n_output), 1)
 
+            qulen = qulen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
+            qvlen = qvlen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
+            qnlen = qnlen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
 
+            embed_qu = u_output.gather(1, qulen.detach())
+            embed_qv = v_output.gather(1, qvlen.detach())
+            neg_embed_qv = n_output.gather(1, qnlen.detach())
+
+            # TODO: check correctness
 
             """
             # embed_qu = Variable(torch.zeros((qpos[0].shape[0], self.emb_dim)).cuda())
@@ -199,6 +221,7 @@ class NeRank(nn.Module):
                 In : LongTensor(N,M)
                 Out: (N, W, embedding_dim)
             """
+
             print(neg_embed_v.shape)
             print(embed_u.unsqueeze(2).shape)
             neg_score = torch.bmm(neg_embed_v, embed_u.unsqueeze(2)).squeeze()
@@ -216,22 +239,30 @@ class NeRank(nn.Module):
             emb_rank_r = self.ru_embeddings(rank[0])
             emb_rank_a = self.au_embeddings(rank[1])
             emb_rank_acc = self.au_embeddings(rank[2])
-            emb_rank_q = torch.zeros((rank[3].shape[0], self.emb_dim)).cuda()
+            rank_q, rank_q_len = rank[3], rank[4]
 
-            for ind, qid in enumerate(rank[3]):
-                qid = int(qid)
-                lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
-                _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
-                emb_rank_q[ind] = torch.sum(lstm_last_hidden.data, dim=0)
-            emb_rank_q = Variable(emb_rank_q)
+            rank_q_output, _ = self.ubirnn(rank_q, self.init_hc())
+            rank_q_pad = Variable(torch.zeros(
+                rank_q_output.size(0), 1, rank_q_output.size(2))).cuda()
+            rank_q_output = torch.cat((rank_q_pad, rank_q_output))
+            rank_q_len = rank_q_len.unsqueeze(1).expand(-1, self.emb_dim).unsquueze(1)
+            emb_rank_q = rank_q_output.gather(1, rank_q_len.detach())
+
+            """
+            # emb_rank_q = torch.zeros((rank[3].shape[0], self.emb_dim)).cuda()
+            #
+            # for ind, qid in enumerate(rank[3]):
+            #     qid = int(qid)
+            #     lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
+            #     _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
+            #     emb_rank_q[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+            # emb_rank_q = Variable(emb_rank_q)
+            """
 
             low_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a], dim=1)
             low_rank_mat = low_rank_mat.unsqueeze(1)
             high_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_acc], dim=1)
             high_rank_mat = high_rank_mat.unsqueeze(1)
-
-            print("rank mats done")
-
 
             low_score = self.fc1(self.convnet1(low_rank_mat).view(-1, self.out_channel)) \
                       + self.fc2(self.convnet2(low_rank_mat).view(-1, self.out_channel)) \
@@ -244,23 +275,30 @@ class NeRank(nn.Module):
             rank_loss = torch.sum(low_score - high_score)
 
             loss = F.sigmoid(ne_loss) + self.lambda_ * F.sigmoid(rank_loss)
-            print("rank score, done")
             print("The loss is {}".format(loss.data[0]))
             return loss
         else:
-            test_a, test_r, test_q = test_data
+            test_a, test_r, test_q, test_q_len = test_data
             a_size = len(test_a)
 
             # The test_a and test_r are vectors
             emb_rank_a = self.au_embeddings(test_a)
             emb_rank_r = self.au_embeddings(test_r)
 
-            # However, the test_q is an int, only one is needed
-            lstm_input = Variable(torch.FloatTensor(dl.q2emb(test_q)).unsqueeze(1).cuda(),
-                                  volatile=True)
-            _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
-            lstm_last_hidden = torch.sum(dim=0).squeeze()
-            emb_rank_q = lstm_last_hidden.repeat(a_size).view(a_size, self.emb_dim)
+            test_q_output, _ = self.ubirnn(test_q.unsqueeze(0), self.init_hc())
+
+            test_q_target_output = torch.index_select(
+                test_q_output.squeeze(), 0, torch.LongTensor(test_q_len))
+            #  TODO: the size of test_q_target_output
+            emb_rank_q = test_q_target_output.repeat(a_size).view(a_size, self.emb_dim)
+
+            """
+            # lstm_input = Variable(torch.FloatTensor(dl.q2emb(test_q)).unsqueeze(1).cuda(),
+            #                       volatile=True)
+            # _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
+            # lstm_last_hidden = torch.sum(dim=0).squeeze()
+            # emb_rank_q = lstm_last_hidden.repeat(a_size).view(a_size, self.emb_dim)
+            """
             emb_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a], dim=1)
             score = self.fc1(self.convnet1(emb_rank_mat).view(-1, self.out_channel)) \
                   + self.fc2(self.convnet2(emb_rank_mat).view(-1, self.out_channel)) \
@@ -268,6 +306,4 @@ class NeRank(nn.Module):
 
             print("Test score shape", score.shape)
             ret_score = score.data.squeeze().tolist()
-            del emb_rank_a, emb_rank_r, lstm_imput, lstm_last_hidden,\
-                    emb_rank_q, emb_rank_mat, score
             return ret_score

@@ -461,7 +461,7 @@ class DataLoader():
         qid2emb, qid2len = {}, {}
         for qid in self.q2r.keys():
             qid2emb[qid], qid2len[qid] = self.__qid_to_concatenate_emb(qid)
-        return qid2emb
+        return qid2emb, qid2len
 
     def q2emb(self, qid):
         """
@@ -470,7 +470,7 @@ class DataLoader():
         Args:
             qid  -  Hello
         """
-        return self.qid2emb[qid]
+        return self.qid2emb[qid], self.qid2len[qid]
 
     def __load_test(self):
         """

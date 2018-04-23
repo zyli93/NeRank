@@ -183,12 +183,16 @@ class PDER:
             rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
             rep_rid = [rid] * len(aid_list)
             rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
+            rank_q, rank_q_len = dl.q2emb(qid)
+            rank_q = Variable(rank_q)
+
             if torch.cuda.is_available():
                 rank_a = rank_a.cuda()
                 rank_r = rank_r.cuda()
+                rank_q = rank_q.cuda()
             score = model(rpos=None, apos=None, qpos=None,
                           rank=None, nsample=None, dl=dl,
-                          test_data=[rank_a, rank_r, qid], train=False)
+                          test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
             RR, prec = dl.perform_metric(aid_list, score.tolist(),
                                          accid, self.prec_k)
             MRR += RR
