@@ -102,10 +102,12 @@ class PDER:
                 apos = [aupos, avpos, anpos]
 
                 # Q
-                qupos = Variable(torch.LongTensor(upos[2]))
-                qvpos = Variable(torch.LongTensor(vpos[2]))
-                qnpos = Variable(torch.LongTensor(npos[2]))
-                qpos = [qupos, qvpos, qnpos]
+                # qupos = Variable(torch.LongTensor(upos[2]))
+                # qvpos = Variable(torch.LongTensor(vpos[2]))
+                # qnpos = Variable(torch.LongTensor(npos[2]))
+                # qpos = [qupos, qvpos, qnpos]
+
+
 
                 print("check point 2, r,a,q done")
 

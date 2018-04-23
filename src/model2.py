@@ -119,41 +119,61 @@ class NeRank(nn.Module):
             neg_embed_rv = self.rv_embeddings(rpos[2])
             neg_embed_av = self.av_embeddings(apos[2])
 
-            embed_qu = Variable(torch.zeros((qpos[0].shape[0], self.emb_dim)).cuda())
-            embed_qv = Variable(torch.zeros((qpos[1].shape[0], self.emb_dim)).cuda())
-            neg_embed_qv = Variable(torch.zeros((qpos[2].shape[0], self.emb_dim)).cuda())
+            # wc: word concatenate
+            q_input_u = Variable(torch.FloatTensor(wvq[0]).view(-1, dl.PAD_LEN, 300))
+            q_input_v = Variable(torch.FloatTensor(wvq[1]).view(-1, dl.PAD_LEN, 300))
+            q_len_u = Variable(torch.LongTensor(qlen[0]))
+            q_len_v = Variable(torch.LongTensor(qlen[1]))
 
-            print("embedding a,q,v done")
 
-            for ind, qid in enumerate(qpos[0]):  # 0 for "u"
-                qid = int(qid)
-                if qid:
-                    # lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
-                    lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
-                    self.ubirnn.flatten_parameters()
-                    _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
-                    embed_qu.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
-                else:
-                    embed_qu.data[ind] = torch.zeros((1, self.emb_dim))
 
-            for ind, qid in enumerate(qpos[1]):
-                qid = int(qid)
-                if qid:
-                    lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
-                    self.vbirnn.flatten_parameters()
-                    _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
-                    embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
-                else:
-                    embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
 
-            for ind, qid in enumerate(qpos[2]):
-                qid = int(qid)
-                if qid:
-                    lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
-                    _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
-                    neg_embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
-                else:
-                    neg_embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
+
+
+
+
+
+
+
+            output, _ = self.ubirnn()
+
+            """
+            # embed_qu = Variable(torch.zeros((qpos[0].shape[0], self.emb_dim)).cuda())
+            # embed_qv = Variable(torch.zeros((qpos[1].shape[0], self.emb_dim)).cuda())
+            # neg_embed_qv = Variable(torch.zeros((qpos[2].shape[0], self.emb_dim)).cuda())
+
+            # print("embedding a,q,v done")
+
+            # for ind, qid in enumerate(qpos[0]):  # 0 for "u"
+            #     qid = int(qid)
+            #     if qid:
+            #         # lstm_input = Variable(torch.FloatTensor(dl.qtc(qid)).unsqueeze(1).cuda())
+            #         lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
+            #         self.ubirnn.flatten_parameters()
+            #         _, (lstm_last_hidden, _) = self.ubirnn(lstm_input, self.init_hc())
+            #         embed_qu.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+            #     else:
+            #         embed_qu.data[ind] = torch.zeros((1, self.emb_dim))
+            # 
+            # for ind, qid in enumerate(qpos[1]):
+            #     qid = int(qid)
+            #     if qid:
+            #         lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
+            #         self.vbirnn.flatten_parameters()
+            #         _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
+            #         embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+            #     else:
+            #         embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
+            # 
+            # for ind, qid in enumerate(qpos[2]):
+            #     qid = int(qid)
+            #     if qid:
+            #         lstm_input = Variable(torch.FloatTensor(dl.q2emb(qid)).unsqueeze(1).cuda())
+            #         _, (lstm_last_hidden, _) = self.vbirnn(lstm_input, self.init_hc())
+            #         neg_embed_qv.data[ind] = torch.sum(lstm_last_hidden.data, dim=0)
+            #     else:
+            #         neg_embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
+            """
 
             print("LSTM embedding done")
 

@@ -18,6 +18,7 @@ test_index = 0
 class DataLoader():
     def __init__(self, dataset, include_content, mp_coverage, mp_length):
         print("initializing data_loader ...")
+        self.PAD_LEN = 24
         self.dataset = dataset
         self.include_content = include_content
         self.mpfile = os.getcwd() \
@@ -47,7 +48,7 @@ class DataLoader():
         self.__load_rqa()
 
         print("\tcreating qid embeddings map ...")
-        self.qid2emb = self.__qid2embedding()
+        self.qid2emb, self.qid2len = self.__qid2embedding()
 
         print("\tloading test sets ...")
         self.testset = self.__load_test()
@@ -221,18 +222,27 @@ class DataLoader():
 
         return:
             qvec  -  the vector of the question, numpy.ndarray
+            q_len  -  the length of that question
         """
+        q_len = 0
         if qid:
             question = self.qid2sen[qid]
             question = [x for x in question.strip().split(" ")
                           if x in self.w2vmodel.vocab]
             if not question:
-                qvecs = np.random.random(300).reshape((1, 300))
+                # qvecs = np.random.random(300).reshape((1, 300))
+                qvecs = [[0.0] * 300 for _ in range(self.PAD_LEN)]
             else:
-                qvecs = self.w2vmodel[question]
+                qvecs = list(self.w2vmodel[question])
+                q_len = len(question)
+                if q_len > self.PAD_LEN:
+                    qvecs = qvecs[:self.PAD_LEN]
+                else:
+                    pad_size = self.PAD_LEN - q_len
+                    qvecs += [[0.0] * 300 for _ in range(pad_size)]
         else:
-            qvecs = np.zeros((1, 300))
-        return qvecs
+            qvecs = [[0.0] * 300 for _ in range(self.PAD_LEN)]
+        return qvecs, q_len
 
     def qtc(self, qid):
         return self.__qid_to_concatenate_emb(qid)
@@ -448,14 +458,15 @@ class DataLoader():
         Return:
             qid2emb  -  the loaded map
         """
-        qid2emb  = {}
+        qid2emb, qid2len = {}, {}
         for qid in self.q2r.keys():
-            qid2emb[qid] = self.__qid_to_concatenate_emb(qid)
+            qid2emb[qid], qid2len[qid] = self.__qid_to_concatenate_emb(qid)
         return qid2emb
 
     def q2emb(self, qid):
         """
         Getter func of qid2emb
+        NOT IN USE
         Args:
             qid  -  Hello
         """
@@ -536,6 +547,23 @@ class DataLoader():
         for ind, (aid, score) in id_score_pair:
             if aid == accid:
                 return 1/(ind+1), int(ind < k)
+
+    def qid2vec_padded(self, qid_list):
+        """
+        Convert qid list to a padded sequence.
+        The padded length is hard coded into the class
+
+        Args:
+            qid_list  -  the list of qid
+        Returns:
+            padded array  -  the padded array
+            len_list  -  the list of length used for gather
+        """
+        qvecs, qlens = [], []
+        for qid in range(qid_list):
+            qvecs.append(self.qid2emb[qid])
+            qlens.append(self.qid2len[qid])
+        return qvecs, qlens
 
 
 if __name__ == "__main__":
