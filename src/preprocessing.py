@@ -227,17 +227,17 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
                 sample_table.add(qid)
             break
 
-    print("First print all QAU map")
+    print("\t\tFirst print all QAU map")
     with open(data_dir + OUTPUT, 'w') as fout:
         for q in qa_map.keys():
             fout.write(json.dumps(qa_map[q]) + "\n")
 
-    print("Length of the sample table is {}".format(len(sample_table)))
-    print("Sampling {} from the sample table".format(int(total * prop_test)))
+    print("\t\tLength of sample table {}".format(len(sample_table)), end=" ")
+    print("Sampling {} from it.".format(int(total * prop_test)))
     test = np.random.choice(list(sample_table), size=int(total * prop_test),
                             replace=False)
 
-    print("Writing the sampled test set to disk")
+    print("\t\tWriting the sampled test set to disk")
     with open(parsed_dir + OUTPUT_TEST, "w") as fout_test, \
         open(parsed_dir + OUTPUT_TEST_QA, "w") as fout_alist:
         for qid in test:
@@ -256,7 +256,7 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
             del qa_map[qid]
 
     # Write QA pair to file
-    print("Finally write the train QAU to disk")
+    print("\t\tFinally write the train QAU to disk")
     with open(data_dir + OUTPUT_TRAIN, 'w') as fout:
         for q in qa_map.keys():
             fout.write(json.dumps(qa_map[q]) + "\n")
@@ -498,7 +498,7 @@ def preprocess_(dataset, threshold, prop_test):
     DATA_DIR= os.getcwd() + "/data/{}/".format(DATASET)
     PARSED_DIR = os.getcwd() + "/data/parsed/{}/".format(DATASET)
 
-    print("Preprocessing {} ...".format(dataset), end=" ")
+    print("Preprocessing {} ...".format(dataset))
 
     if not os.path.exists(RAW_DIR):
         print("{} dir or path doesn't exist.\n"
@@ -532,16 +532,16 @@ def preprocess_(dataset, threshold, prop_test):
     logger.addHandler(log_fh)
 
     # Split contest to question and answer
-    print("Spliting post")
+    print("\tSpliting post")
     split_post(raw_dir=RAW_DIR, data_dir=DATA_DIR)
 
     # Extract question-user, answer-user, and question-answer information
     # Generate Question and Answer/User map
-    print("Processing QA")
+    print("\tProcessing QA")
     process_QA(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
                threshold=threshold, prop_test=prop_test)
 
-    
+    print("\tExtracting Q, R, A relations ...")
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     extract_question_answer_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)

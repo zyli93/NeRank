@@ -18,7 +18,7 @@ test_index = 0
 
 class DataLoader():
     def __init__(self, dataset, include_content, mp_coverage, mp_length):
-        print("initializing data_loader ...")
+        print("Initializing data_loader ...")
         self.PAD_LEN = 24
         self.dataset = dataset
         self.include_content = include_content
@@ -54,11 +54,12 @@ class DataLoader():
 
         print("\tloading test sets ...")
         self.testset = self.__load_test()
+        print("\tloading test set q-a pairs ...")
         self.testqa = self.__load_test_qa()
 
         self.process = True
 
-        print("done!")
+        print("Done - Data Loader!")
 
     def __read_data(self):
         """
@@ -102,7 +103,7 @@ class DataLoader():
         count = [ele[1] for ele in self.count]
         pow_freq = np.array(count) ** 0.75
         ratio = pow_freq / sum(pow_freq)
-        table_size = 1e6 # todo: what is this???
+        table_size = 2e7 # todo: what is this???
         count = np.round(ratio * table_size).astype(np.int64)
         sample_table = []
 

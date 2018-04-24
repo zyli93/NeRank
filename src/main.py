@@ -5,7 +5,7 @@ from pder2 import PDER
 import os, sys
 from optparse import OptionParser
 
-os.environ["CUDA_VISIBLE_DEVICES"]="1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 
 def runPDER(options):
 

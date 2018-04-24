@@ -13,3 +13,4 @@ notes/.ipynb_checkpoints/
 metapath/
 
 src/__pycache__/*
+old_src/*
