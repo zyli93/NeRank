@@ -153,6 +153,7 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
     OUTPUT = "QAU_Map_all.json"
     OUTPUT_TEST = "test.txt"
     OUTPUT_TRAIN = "QAU_Map.json"
+    OUTPUT_TEST_QA = "test_q_alist.txt"
 
     # Get logger to log exceptions
     logger = logging.getLogger(__name__)
@@ -237,11 +238,15 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
                             replace=False)
 
     print("Writing the sampled test set to disk")
-    with open(parsed_dir + OUTPUT_TEST, "w") as fout:
+    with open(parsed_dir + OUTPUT_TEST, "w") as fout_test, \
+        open(parsed_dir + OUTPUT_TEST_QA, "w") as fout_alist:
         for qid in test:
             rid = qa_map[qid]['QuestionOwnerId']
             accid = qa_map[qid]['AcceptedAnswerId']
-            print("{} {} {}".format(rid, qid, accid ), file=fout)
+            alist = qa_map[qid]['AnswerOwnerList']
+            print("{} {} {}".format(rid, qid, accid ), file=fout_test)
+            for answerid, answer_owner_id in alist:
+                print("{} {}".format(qid, answer_owner_id), file=fout_alist)
 
     # if qid is a test instance or qid doesn't have an answer
     for qid in qid_list:

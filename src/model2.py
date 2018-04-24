@@ -1,4 +1,5 @@
 """
+            irint("check point 1, epoch", epoch)
 
     Model file
 
@@ -103,7 +104,6 @@ class NeRank(nn.Module):
             - Compute the Rank loss
         """
         if train:
-            print("Enter train, cp1")
             embed_ru = self.ru_embeddings(rpos[0])
             embed_au = self.au_embeddings(apos[0])
 
@@ -116,8 +116,6 @@ class NeRank(nn.Module):
             # wc: word concatenate
             quinput, qvinput, qninput = qinfo[:3]
             qulen, qvlen, qnlen = qinfo[3:]
-            print("qinput shape: u,v,n", 
-                    quinput.shape, qvinput.shape, qninput.shape)
 
             # First, pad 0 at left
             # Second, expand the qxlen
@@ -150,8 +148,8 @@ class NeRank(nn.Module):
             qvlen = qvlen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
             qnlen = qnlen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
 
-            print("uoutput, qulen shape",
-                    u_output.shape, qulen.shape)
+            # print("uoutput, qulen shape",
+            #         u_output.shape, qulen.shape)
             embed_qu = u_output.gather(1, qulen.detach())
             embed_qv = v_output.gather(1, qvlen.detach())
             neg_embed_qv = n_output.gather(1, qnlen.detach())
@@ -196,9 +194,8 @@ class NeRank(nn.Module):
             #         neg_embed_qv.data[ind] = torch.zeros((1, self.emb_dim))
             """
 
-            print("LSTM embedding done")
 
-            print("embed_u shape", embed_ru.shape, embed_au.shape, embed_qu.shape)
+            # print("embed_u shape", embed_ru.shape, embed_au.shape, embed_qu.shape)
 
             embed_u = embed_ru + embed_au + embed_qu.squeeze()
             embed_v = embed_rv + embed_av + embed_qv.squeeze()
@@ -209,8 +206,8 @@ class NeRank(nn.Module):
             log_target = F.logsigmoid(score).squeeze()
 
             neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv.squeeze()
-            print("neg shape",
-                    neg_embed_av.shape, neg_embed_rv.shape, neg_embed_qv.shape)
+            # print("neg shape",
+            #        neg_embed_av.shape, neg_embed_rv.shape, neg_embed_qv.shape)
             neg_embed_v = neg_embed_v.view(nsample, -1, self.emb_dim)
 
             """
@@ -235,15 +232,15 @@ class NeRank(nn.Module):
                 Out: (N, W, embedding_dim)
             """
 
-            print(neg_embed_v.shape)
-            print(embed_u.unsqueeze(2).shape)
+            # print(neg_embed_v.shape)
+            # print(embed_u.unsqueeze(2).shape)
             neg_score = torch.bmm(neg_embed_v, embed_u.unsqueeze(2)).squeeze()
             neg_score = torch.sum(neg_score)
             sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
             ne_loss = log_target + sum_log_sampled
 
-            print("ne loss done")
+            # print("ne loss done")
 
             """
                 === Ranking ===
@@ -273,8 +270,8 @@ class NeRank(nn.Module):
             # emb_rank_q = Variable(emb_rank_q)
             """
 
-            print("low rank mat shape", 
-                    emb_rank_r.shape, emb_rank_q.shape, emb_rank_a.shape)
+            # print("low rank mat shape", 
+            #         emb_rank_r.shape, emb_rank_q.shape, emb_rank_a.shape)
             low_rank_mat = torch.stack(
                     [emb_rank_r, emb_rank_q.squeeze(), emb_rank_a], dim=1)
             low_rank_mat = low_rank_mat.unsqueeze(1)
@@ -301,14 +298,13 @@ class NeRank(nn.Module):
 
             # The test_a and test_r are vectors
             emb_rank_a = self.au_embeddings(test_a)
-            emb_rank_r = self.au_embeddings(test_r)
+            emb_rank_r = self.ru_embeddings(test_r)
 
             test_q_output, _ = self.ubirnn(
                     test_q.unsqueeze(0), self.init_hc(1))
 
             test_q_target_output = torch.index_select(
-                test_q_output.squeeze(), 0, torch.LongTensor(test_q_len))
-            #  TODO: the size of test_q_target_output
+                test_q_output.squeeze(), 0, Variable(torch.LongTensor(test_q_len)).cuda().detach())
             emb_rank_q = test_q_target_output.repeat(a_size).view(a_size, self.emb_dim)
 
             """
@@ -323,6 +319,6 @@ class NeRank(nn.Module):
                   + self.fc2(self.convnet2(emb_rank_mat).view(-1, self.out_channel)) \
                   + self.fc3(self.convnet3(emb_rank_mat).view(-1, self.out_channel))
 
-            print("Test score shape", score.shape)
+            # print("Test score shape", score.shape)
             ret_score = score.data.squeeze().tolist()
             return ret_score

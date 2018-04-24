@@ -53,6 +53,7 @@ class DataLoader():
 
         print("\tloading test sets ...")
         self.testset = self.__load_test()
+        self.testqa = self.__load_test_qa()
 
         self.process = True
 
@@ -142,7 +143,11 @@ class DataLoader():
                 break
             pairs_list += pairs
 
-        u, v = zip(*pairs_list)
+        try:
+            u, v = zip(*pairs_list)
+        except:
+            print(pairs_list)
+            pass
         upos = self.__separate_entity(u)
         vpos = self.__separate_entity(v)
 
@@ -415,7 +420,7 @@ class DataLoader():
         Return:
             qid2emb  -  the loaded map
         """
-        for qid in self.q2r.keys():
+        for qid in self.qid2sen.keys():
             qlen, qvecs = self.__qid_to_concatenate_emb(qid)
             self.qid2emb[qid] = qvecs
             self.qid2len[qid] = qlen
@@ -459,7 +464,7 @@ class DataLoader():
             for line in lines:
                 rid, qid, accid = [int(x) for x in line.strip().split()]
                 test_set.append((rid, qid, accid))
-        return test_set
+        return np.array(test_set)
 
     def build_test_batch(self, test_prop, test_neg_ratio):
         """
@@ -478,25 +483,28 @@ class DataLoader():
                 qid - the question ID (scalar)
                 accaid - the accepted answer owner ID (scaler)
         """
-        total = len(self.testset)
+        total = self.testset.shape[0]
         if test_prop:
             batch_size = int(total * test_prop)
-            batch = np.random.choice(self.testset, batch_size).tolist()
+            inds = np.arange(total)
+            batch_inds = np.random.choice(inds, batch_size, replace=False)
+            batch = self.testset[batch_inds]
         else:
             batch = self.testset
 
         test_batch = []
         for test_sample in batch:
             rid, qid, accaid = test_sample
-            alist = self.q2a[qid]
+            # alist = self.q2a[qid]
+            alist = self.testqa[qid]
             # Sample some negative
             neg_alist = np.random.choice(self.all_aid,
                                          test_neg_ratio * len(alist),
                                          replace=False)
             trank_a = []
-            for aid in alist + neg_alist:
+            for aid in alist + neg_alist.tolist():
                 trank_a.append(aid)
-            test_batch.append([trank_a, rid, qid, accaid])
+            test_batch.append([rid, qid, accaid, trank_a])
         return test_batch
 
     def perform_metric(self, aid_list, score_list, accid, k):
@@ -542,6 +550,26 @@ class DataLoader():
         """
         qlens = [self.qid2len[qid] for qid in qid_list]
         return qlens
+    
+    def __load_test_qa(self):
+        """
+        Load answers list of questions in test set
+
+        Args:
+        Returns:
+            test_qa  -  the qa set of the test dataset
+        """
+        test_qa = {}
+        with open(self.datadir + "test_q_alist.txt", "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                pair = [int(x) for x in line.strip().split(" ")]
+                qid, aid = pair[0], pair[1]
+                if qid not in test_qa:
+                    test_qa[qid] = [aid]
+                else:
+                    test_qa[qid].append(aid)
+        return test_qa
 
 if __name__ == "__main__":
     test = DataLoader(dataset="3dprinting")

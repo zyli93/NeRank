@@ -65,10 +65,11 @@ class PDER:
             dl.process = True
 
             iter = 0
-            print("check point 1, epoch", epoch)
 
             while dl.process:
                 print("Epoch-{}, Iteration-{}".format(epoch, iter), end="")
+                if iter == 20:
+                    break
                 upos, vpos, npos, nsample, aqr, accqr \
                     = dl.generate_batch(
                         window_size=self.window_size,
@@ -116,7 +117,6 @@ class PDER:
                 qnlen = dl.qid2vec_len(npos[2])
 
                 qu_wc = Variable(torch.FloatTensor(qu_wc).view(-1, dl.PAD_LEN, 300))
-                print(qu_wc.shape)
                 qv_wc = Variable(torch.FloatTensor(qv_wc).view(-1, dl.PAD_LEN, 300))
                 qn_wc = Variable(torch.FloatTensor(qn_wc).view(-1, dl.PAD_LEN, 300))
                 qulen = Variable(torch.LongTensor(qulen))
@@ -124,8 +124,6 @@ class PDER:
                 qnlen = Variable(torch.LongTensor(qnlen))
 
                 qinfo = [qu_wc, qv_wc, qn_wc, qulen, qvlen, qnlen]
-
-                print("check point 2, r,a,q done")
 
                 # aqr: R, A, Q
 
@@ -139,8 +137,6 @@ class PDER:
 
                 # rank_q = Variable(torch.LongTensor(aqr[:, 2]))
                 rank = [rank_r, rank_a, rank_acc, rank_q, rank_q_len]
-
-                print("check point 3, rank done")
 
                 if torch.cuda.is_available():
                     rpos = [x.cuda() for x in rpos]
@@ -156,7 +152,6 @@ class PDER:
                              # qpos=qpos,
                              rank=rank, nsample=nsample, dl=dl,
                              test_data=None)
-                print("check point 4, got loss")
 
                 loss.backward()
                 optimizer.step()
@@ -186,18 +181,19 @@ class PDER:
 
         # The format of tbatch is:
         #   [aids], rid, qid, accid
-        for aid_list, rid, qid, accid in tbatch:
+        for rid, qid, accid, aid_list in tbatch:
             rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
             rep_rid = [rid] * len(aid_list)
             rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
-            rank_q, rank_q_len = dl.q2emb(qid)
-            rank_q = Variable(rank_q)
+            rank_q_len= dl.q2len(qid)
+            # TODO: modify rank_r
+            rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)))
 
             if torch.cuda.is_available():
                 rank_a = rank_a.cuda()
                 rank_r = rank_r.cuda()
                 rank_q = rank_q.cuda()
-            score = model(rpos=None, apos=None, qpos=None,
+            score = model(rpos=None, apos=None, qinfo=None,
                           rank=None, nsample=None, dl=dl,
                           test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
             RR, prec = dl.perform_metric(aid_list, score.tolist(),
