@@ -11,6 +11,7 @@ import numpy as np
 import os, sys
 
 import gensim
+import random
 
 data_index = 0
 test_index = 0
@@ -318,7 +319,12 @@ class DataLoader():
         Return:
             the transformed numpy array
         """
-        vfunc = np.vectorize(lambda x: self.uid2ind[x])
+        def vfind(d, id):
+            if id in d:
+                return d[id]
+            else:
+                return random.choice(list(d.values()))
+        vfunc = np.vectorize(lambda x: vfind(self.uid2ind, x))
         return vfunc(vec)
 
     def index2uid(self, vec):
@@ -495,7 +501,6 @@ class DataLoader():
         test_batch = []
         for test_sample in batch:
             rid, qid, accaid = test_sample
-            # alist = self.q2a[qid]
             alist = self.testqa[qid]
             # Sample some negative
             neg_alist = np.random.choice(self.all_aid,

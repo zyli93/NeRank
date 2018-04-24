@@ -11,9 +11,6 @@ from torch.autograd import Variable
 import torch.optim as optim
 import torch.nn as nn
 
-import numpy as np
-import time
-
 from model2 import NeRank
 from data_loader import DataLoader
 
@@ -68,7 +65,7 @@ class PDER:
 
             while dl.process:
                 print("Epoch-{}, Iteration-{}".format(epoch, iter), end="")
-                if iter == 20:
+                if iter == 10:
                     break
                 upos, vpos, npos, nsample, aqr, accqr \
                     = dl.generate_batch(
@@ -182,12 +179,14 @@ class PDER:
         # The format of tbatch is:
         #   [aids], rid, qid, accid
         for rid, qid, accid, aid_list in tbatch:
-            rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
+            rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)),
+                              volatile=True)
             rep_rid = [rid] * len(aid_list)
-            rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
+            rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)),
+                              volatile=True)
             rank_q_len= dl.q2len(qid)
             # TODO: modify rank_r
-            rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)))
+            rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)), volatile=True)
 
             if torch.cuda.is_available():
                 rank_a = rank_a.cuda()
