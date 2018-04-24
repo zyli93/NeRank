@@ -18,7 +18,8 @@ def runPDER(options):
     if options.preprocess:
         preprocess_(dataset=options.dataset,
                     threshold=options.test_threshold,
-                    prop_test=options.proportion_test)
+                    prop_test=options.proportion_test,
+                    ratio=options.neg_test_ratio)
 
     # preprocessing
     if options.gen_mp:
@@ -49,7 +50,6 @@ def runPDER(options):
         neg_test_ratio=options.neg_test_ratio,
         mp_length=options.length,
         mp_coverage=options.coverage
-
     )
 
     pder_model.train()

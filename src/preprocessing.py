@@ -22,7 +22,7 @@ nltk.data.path.append("/workspace/nltk_data")
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
-import string
+import string, random
 
 try:
     import ujson as json
@@ -138,7 +138,7 @@ def split_post(raw_dir, data_dir):
     return
 
 
-def process_QA(parsed_dir, data_dir, threshold, prop_test):
+def process_QA(parsed_dir, data_dir, threshold, prop_test, neg_ratio):
     """Process QA
 
     Extract attributes used in this project
@@ -238,16 +238,24 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
                             replace=False)
 
     print("\t\tWriting the sampled test set to disk")
+    all_aid = list(count_A.keys())
     with open(parsed_dir + OUTPUT_TEST, "w") as fout_test, \
         open(parsed_dir + OUTPUT_TEST_QA, "w") as fout_alist:
         for qid in test:
             rid = qa_map[qid]['QuestionOwnerId']
             accid = qa_map[qid]['AcceptedAnswerId']
-            alist = qa_map[qid]['AnswerOwnerList']
-            for answerid, answer_owner_id in alist:
+            aolist = qa_map[qid]['AnswerOwnerList']
+            a_pos_samples = [x[1] for x in aolist]
+            n_neg_samples = int(neg_ratio * len(a_pos_samples))
+            a_neg_samples = random.sample(all_aid, n_neg_samples)
+            a_samples = a_neg_samples + a_pos_samples
+            a_samples = " ".join(random.shuffle(a_samples))
+
+            for answer_id, answer_owner_id in aolist:
                 print("{} {}".format(qid, answer_owner_id), file=fout_alist)
-                if answerid == accid:
-                    print("{} {} {}".format(rid, qid, answer_owner_id), 
+                if answer_id == accid:
+                    print("{} {} {} {}"
+                          .format(rid, qid, accid, a_samples),
                           file=fout_test)
 
     # if qid is a test instance or qid doesn't have an answer
@@ -492,7 +500,7 @@ def write_part_users(parsed_dir):
             print("{}".format(user_id), file=fout)
 
 
-def preprocess_(dataset, threshold, prop_test):
+def preprocess_(dataset, threshold, prop_test, ratio):
     DATASET = dataset
     RAW_DIR = os.getcwd() + "/raw/{}/".format(DATASET)
     DATA_DIR= os.getcwd() + "/data/{}/".format(DATASET)
@@ -539,7 +547,8 @@ def preprocess_(dataset, threshold, prop_test):
     # Generate Question and Answer/User map
     print("\tProcessing QA")
     process_QA(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
-               threshold=threshold, prop_test=prop_test)
+               threshold=threshold, prop_test=prop_test,
+               neg_ratio=ratio)
 
     print("\tExtracting Q, R, A relations ...")
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
@@ -564,4 +573,4 @@ if __name__ == "__main__":
         sys.exit(0)
     threshold = int(sys.argv[2])
     prop_test = float(sys.argv[3])
-    preprocess_(sys.argv[1], threshold, prop_test)
+    preprocess_(sys.argv[1], threshold, prop_test, ratio)

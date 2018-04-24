@@ -465,9 +465,12 @@ class DataLoader():
         with open(test_file, "r") as fin:
             lines = fin.readlines()
             for line in lines:
-                rid, qid, accid = [int(x) for x in line.strip().split()]
-                test_set.append((rid, qid, accid))
-        return np.array(test_set)
+                test_data = [int(x) for x in line.strip().split()]
+                rid, qid, accid = test_data[:3]
+                aids = test_data[3:]
+                # rid, qid, accid = [int(x) for x in line.strip().split()]
+                test_set.append((rid, qid, accid, aids))
+        return test_set
 
     def build_test_batch(self, test_prop, test_neg_ratio):
         """
@@ -486,28 +489,30 @@ class DataLoader():
                 qid - the question ID (scalar)
                 accaid - the accepted answer owner ID (scaler)
         """
-        total = self.testset.shape[0]
+        # total = self.testset.shape[0]
+        total = len(self.testset)
         if test_prop:
             batch_size = int(total * test_prop)
-            inds = np.arange(total)
-            batch_inds = np.random.choice(inds, batch_size, replace=False)
-            batch = self.testset[batch_inds]
+            batch = random.sample(self.testset, batch_size)
+            # inds = np.arange(total)
+            # batch_inds = np.random.choice(inds, batch_size, replace=False)
+            # batch = self.testset[batch_inds]
         else:
             batch = self.testset
 
-        test_batch = []
-        for test_sample in batch:
-            rid, qid, accaid = test_sample
-            alist = self.testqa[qid]
-            # Sample some negative
-            neg_alist = np.random.choice(self.all_aid,
-                                         test_neg_ratio * len(alist),
-                                         replace=False)
-            trank_a = []
-            for aid in alist + neg_alist.tolist():
-                trank_a.append(aid)
-            test_batch.append([rid, qid, accaid, trank_a])
-        return test_batch
+        # test_batch = []
+        # for test_sample in batch:
+        #     rid, qid, accaid, aids = test_sample
+        #     alist = self.testqa[qid]
+        #     Sample some negative
+        #     neg_alist = np.random.choice(self.all_aid,
+        #                                  test_neg_ratio * len(alist),
+            #                              replace=False)
+            # trank_a = []
+            # for aid in alist + neg_alist.tolist():
+            #     trank_a.append(aid)
+            # test_batch.append([rid, qid, accaid, trank_a])
+        return batch
 
     def perform_metric(self, aid_list, score_list, accid, k):
         """
