@@ -6,12 +6,14 @@
 
 """
 
+import os
+
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
 import torch.nn as nn
 
-from model2 import NeRank
+from model import NeRank
 from data_loader import DataLoader
 
 
@@ -38,14 +40,16 @@ class PDER:
         self.prec_k = prec_k
         self.neg_test_ratio = neg_test_ratio
 
+        self.model_folder = os.getcwd() + "/model/"
+
         self.model = NeRank(embedding_dim=self.embedding_dim,
                             vocab_size=self.dl.user_count,
                             lstm_layers=self.lstm_layers,
                             cnn_channel=cnn_channel,
-                            lambda_=lambda_)  # TODO: fill in params
+                            lambda_=lambda_)
 
     def train(self):
-        dl = self.dl  # Rename the data loader
+        dl = self.dl
         model = self.model
         if torch.cuda.device_count() < 1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
@@ -56,17 +60,15 @@ class PDER:
         # TODO: Other learning algorithms
         optimizer = optim.SGD(model.parameters(), lr=self.learning_rate)
 
+        batch_count = 0
         for epoch in range(self.epoch_num):
             model.train()
             epoch_total_loss = 0
             dl.process = True
-
             iter = 0
 
             while dl.process:
                 print("Epoch-{}, Iteration-{}".format(epoch, iter), end="")
-                if iter == 10:
-                    break
                 upos, vpos, npos, nsample, aqr, accqr \
                     = dl.generate_batch(
                         window_size=self.window_size,
@@ -99,12 +101,6 @@ class PDER:
                 anpos = Variable(torch.LongTensor(dl.uid2index(npos[1])))
                 apos = [aupos, avpos, anpos]
 
-                # Q
-                # qupos = Variable(torch.LongTensor(upos[2]))
-                # qvpos = Variable(torch.LongTensor(vpos[2]))
-                # qnpos = Variable(torch.LongTensor(npos[2]))
-                # qpos = [qupos, qvpos, qnpos]
-
                 qu_wc = dl.qid2vec_padded(upos[2])
                 qv_wc = dl.qid2vec_padded(vpos[2])
                 qn_wc = dl.qid2vec_padded(npos[2])
@@ -132,13 +128,11 @@ class PDER:
                 rank_q = Variable(torch.FloatTensor(rank_q_wc).view(-1, dl.PAD_LEN, 300))
                 rank_q_len = Variable(torch.LongTensor(rank_q_len))
 
-                # rank_q = Variable(torch.LongTensor(aqr[:, 2]))
                 rank = [rank_r, rank_a, rank_acc, rank_q, rank_q_len]
 
                 if torch.cuda.is_available():
                     rpos = [x.cuda() for x in rpos]
                     apos = [x.cuda() for x in apos]
-                    # qpos = [x.cuda() for x in qpos]
                     qinfo = [x.cuda() for x in qinfo]
                     rank = [x.cuda() for x in rank]
 
@@ -146,7 +140,6 @@ class PDER:
 
                 # loss and rank_loss, the later for evaluation
                 loss = model(rpos=rpos, apos=apos, qinfo=qinfo,
-                             # qpos=qpos,
                              rank=rank, nsample=nsample, dl=dl,
                              test_data=None)
 
@@ -155,9 +148,16 @@ class PDER:
 
                 epoch_total_loss += loss.data[0]  # type(loss) = Variable
                 iter += 1
+                batch_count += 1
 
-                # Save model
-                # torch.save(model.state_dict(), "path here")
+                if batch_count % 2000 == 0:
+                    print("Saving params at batch-{}: Epoch-{}, iter-{}"
+                          .format(batch_count, epoch, iter))
+                    if not os.path.exists(self.model_folder):
+                        print("Creating Model folder")
+                        os.mkdir(self.model_folder)
+                    torch.save(model.state_dict(),
+                               self.model_folder + "model_E{}I{}".format(epoch, iter))
 
             print("Epoch-{:d} Loss sum: {}".format(epoch, epoch_total_loss))
             model.eval()
@@ -176,18 +176,12 @@ class PDER:
         MRR, prec_K = 0, 0
         tbatch_len = len(tbatch)
 
-        # The format of tbatch is:
-        #   [aids], rid, qid, accid
+        # The format of tbatch is:  [aids], rid, qid, accid
         for rid, qid, accid, aid_list in tbatch:
             rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
-            print("aid_list", aid_list)
-            print(rank_a)
             rep_rid = [rid] * len(aid_list)
             rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
-            print("qid", qid)
             rank_q_len= dl.q2len(qid)
-            print("rank_q_len", rank_q_len) 
-            # TODO: modify rank_r
             rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)))
 
             if torch.cuda.is_available():
@@ -197,8 +191,6 @@ class PDER:
             score = model(rpos=None, apos=None, qinfo=None,
                           rank=None, nsample=None, dl=dl,
                           test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
-            print("rank_r", rank_r)
-            print("None type not iteratble", aid_list, score, accid)
             RR, prec = dl.perform_metric(aid_list, score, accid, self.prec_k)
             MRR += RR
             prec_K += prec

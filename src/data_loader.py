@@ -434,10 +434,6 @@ class DataLoader():
         (zero_len, zero_vecs) = self.__qid_to_concatenate_emb(0)
         self.qid2emb[0] = zero_vecs
         self.qid2len[0] = zero_len 
-        print("Print in __qid2embedding, size of self.qid2emb[16]",
-                len(self.qid2emb[16]))
-        print("Print in __qid2embedding, size of self.qid2emb[16][0]",
-                len(self.qid2emb[16][0]))
 
     def q2emb(self, qid):
         """
@@ -529,7 +525,6 @@ class DataLoader():
             sys.exit()
         id_score_pair = list(zip(aid_list, score_list))
         id_score_pair.sort(key=lambda x: x[1], reverse=True)
-        print(id_score_pair)
         for ind, (aid, score) in enumerate(id_score_pair):
             if aid == accid:
                 return 1/(ind+1), int(ind < k)

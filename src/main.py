@@ -1,6 +1,6 @@
 from generate_walk import MetaPathGenerator
 from preprocessing import preprocess_
-from pder2 import PDER
+from pder import PDER
 
 import os, sys
 from optparse import OptionParser
