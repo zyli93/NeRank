@@ -179,14 +179,16 @@ class PDER:
         # The format of tbatch is:
         #   [aids], rid, qid, accid
         for rid, qid, accid, aid_list in tbatch:
-            rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)),
-                              volatile=True)
+            rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
+            print("aid_list", aid_list)
+            print(rank_a)
             rep_rid = [rid] * len(aid_list)
-            rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)),
-                              volatile=True)
+            rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
+            print("qid", qid)
             rank_q_len= dl.q2len(qid)
+            print("rank_q_len", rank_q_len) 
             # TODO: modify rank_r
-            rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)), volatile=True)
+            rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)))
 
             if torch.cuda.is_available():
                 rank_a = rank_a.cuda()
@@ -195,12 +197,13 @@ class PDER:
             score = model(rpos=None, apos=None, qinfo=None,
                           rank=None, nsample=None, dl=dl,
                           test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
-            RR, prec = dl.perform_metric(aid_list, score.tolist(),
-                                         accid, self.prec_k)
+            print("rank_r", rank_r)
+            print("None type not iteratble", aid_list, score, accid)
+            RR, prec = dl.perform_metric(aid_list, score, accid, self.prec_k)
             MRR += RR
             prec_K += prec
 
-        MRR, prec_K= MRR / len(tbatch_len), prec_K / len(tbatch_len)
+        MRR, prec_K= MRR / tbatch_len, prec_K / tbatch_len
         return MRR, prec_K
 
 

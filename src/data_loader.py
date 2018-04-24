@@ -528,7 +528,8 @@ class DataLoader():
             sys.exit()
         id_score_pair = list(zip(aid_list, score_list))
         id_score_pair.sort(key=lambda x: x[1], reverse=True)
-        for ind, (aid, score) in id_score_pair:
+        print(id_score_pair)
+        for ind, (aid, score) in enumerate(id_score_pair):
             if aid == accid:
                 return 1/(ind+1), int(ind < k)
 

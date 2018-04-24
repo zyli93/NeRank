@@ -244,9 +244,11 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test):
             rid = qa_map[qid]['QuestionOwnerId']
             accid = qa_map[qid]['AcceptedAnswerId']
             alist = qa_map[qid]['AnswerOwnerList']
-            print("{} {} {}".format(rid, qid, accid ), file=fout_test)
             for answerid, answer_owner_id in alist:
                 print("{} {}".format(qid, answer_owner_id), file=fout_alist)
+                if answerid == accid:
+                    print("{} {} {}".format(rid, qid, answer_owner_id), 
+                          file=fout_test)
 
     # if qid is a test instance or qid doesn't have an answer
     for qid in qid_list:

@@ -228,16 +228,25 @@ class NeRank(nn.Module):
             emb_rank_r = self.ru_embeddings(test_r)
 
             test_q_output, _ = self.ubirnn(test_q.unsqueeze(0), self.init_hc(1))
+            print("test_q_output.shape", test_q_output.shape)
 
-            ind = Variable(torch.LongTensor(test_q_len), volatile=True).cuda()
+            ind = Variable(torch.LongTensor([test_q_len])).cuda()
+            print("ind", ind)
             test_q_target_output = torch.index_select(test_q_output.squeeze(), 0, ind)
-            emb_rank_q = test_q_target_output.repeat(a_size).view(a_size, self.emb_dim)
+
+            print("test_q_target_output.shape", test_q_target_output.shape)
+            emb_rank_q = test_q_target_output.squeeze()\
+                    .repeat(a_size).view(a_size, self.emb_dim)
+            print(emb_rank_q.shape)
 
             emb_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a], dim=1)
+            emb_rank_mat = emb_rank_mat.unsqueeze(1)
+            print(emb_rank_mat.shape)
             score = self.fc1(self.convnet1(emb_rank_mat).view(-1, self.out_channel)) \
                   + self.fc2(self.convnet2(emb_rank_mat).view(-1, self.out_channel)) \
                   + self.fc3(self.convnet3(emb_rank_mat).view(-1, self.out_channel))
 
             # print("Test score shape", score.shape)
             ret_score = score.data.squeeze().tolist()
+            print(ret_score)
             return ret_score
