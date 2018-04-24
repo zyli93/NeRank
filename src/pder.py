@@ -9,9 +9,7 @@
 import torch
 from torch.autograd import Variable
 import torch.optim as optim
-
-import numpy as np
-import time
+import torch.nn as nn
 
 from model2 import NeRank
 from data_loader import DataLoader
@@ -20,47 +18,61 @@ from data_loader import DataLoader
 class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
                  batch_size, window_size, neg_sample_ratio,
-                 lstm_layers, include_content):
+                 lstm_layers, include_content, lr, cnn_channel,
+                 test_prop, neg_test_ratio, lambda_, prec_k,
+                 mp_length, mp_coverage):
+
         self.dl = DataLoader(dataset=dataset,
-                             include_content=include_content)
+                             include_content=include_content,
+                             mp_coverage=mp_coverage,
+                             mp_length=mp_length)
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
         self.window_size = window_size
         self.epoch_num = epoch_num
         self.neg_sample_ratio = neg_sample_ratio
         self.lstm_layers = lstm_layers
+        self.learning_rate = lr
 
+        self.test_prop = test_prop
+        self.prec_k = prec_k
+        self.neg_test_ratio = neg_test_ratio
+
+        self.model = NeRank(embedding_dim=self.embedding_dim,
+                            vocab_size=self.dl.user_count,
+                            lstm_layers=self.lstm_layers,
+                            cnn_channel=cnn_channel,
+                            lambda_=lambda_)  # TODO: fill in params
 
     def train(self):
-
         dl = self.dl  # Rename the data loader
-        model = NeRank(embedding_dim=self.embedding_dim,
-                       vocab_size=dl.user_count,
-                       lstm_layers=self.lstm_layers)  # TODO: fill in params
+        model = self.model
+        if torch.cuda.device_count() < 1:
+            print("Using {} GPUs".format(torch.cuda.device_count()))
+            model = nn.DataParallel(model)
         if torch.cuda.is_available():  # Check availability of cuda
             model.cuda()
 
-        optimizer = optim.SGD(model.parameters(), lr=0.2)  # TODO: to other optimizer
+        # TODO: Other learning algorithms
+        optimizer = optim.SGD(model.parameters(), lr=self.learning_rate)
 
         for epoch in range(self.epoch_num):
-            start = time.time()
+            model.train()
+            epoch_total_loss = 0
             dl.process = True
 
+            iter = 0
+
             while dl.process:
+                print("Epoch-{}, Iteration-{}".format(epoch, iter), end="")
+                if iter == 10:
+                    break
                 upos, vpos, npos, nsample, aqr, accqr \
                     = dl.generate_batch(
                         window_size=self.window_size,
                         batch_size=self.batch_size,
                         neg_ratio=self.neg_sample_ratio)
-
-                # UID representation to user index representation
-                rupos, rvpos, rnpos = dl.uid2index(upos[0]), \
-                                      dl.uid2index(vpos[0]), \
-                                      dl.uid2index(npos[0])
-                aupos, avpos, anpos = dl.uid2index(upos[1]), \
-                                      dl.uid2index(vpos[1]), \
-                                      dl.uid2index(npos[1])
-                qupos, qvpos, qnpos = upos[2], vpos[2], npos[2]
+                print("\tSample size", nsample)
 
                 """
                 In order to totally vectorize the computation, 
@@ -70,89 +82,130 @@ class PDER:
                 where the corresponding cell in qupos
                     (qvpos, qnpos) is not zero.
                 We use dot product to zero out those undesired columns.
+
+                Create the Variables, only Variables with LongTensor can be
+                  sent to nn.Embedding
                 """
 
-                # Create the Variables, only Variables with LongTensor can be
-                #   sent to nn.Embedding
+                # R-u, R-v, and R-n
+                rupos = Variable(torch.LongTensor(dl.uid2index(upos[0])))
+                rvpos = Variable(torch.LongTensor(dl.uid2index(vpos[0])))
+                rnpos = Variable(torch.LongTensor(dl.uid2index(npos[0])))
+                rpos = [rupos, rvpos, rnpos]
 
-                # R-u and R-v
-                rupos = Variable(torch.LongTensor(rupos))
-                rvpos = Variable(torch.LongTensor(rvpos))
-
-                # A-u and A-v
-                aupos = Variable(torch.LongTensor(aupos))
-                avpos = Variable(torch.LongTensor(avpos))
-
-                # Negative Samples of R and A
-                rnpos = Variable(torch.LongTensor(rnpos))
-                anpos = Variable(torch.LongTensor(anpos))
+                # A-u, A-v, and A-n
+                aupos = Variable(torch.LongTensor(dl.uid2index(upos[1])))
+                avpos = Variable(torch.LongTensor(dl.uid2index(vpos[1])))
+                anpos = Variable(torch.LongTensor(dl.uid2index(npos[1])))
+                apos = [aupos, avpos, anpos]
 
                 # Q
-                quloc = Variable(torch.LongTensor(np.where(qupos > 0, 1, 0)))
-                qvloc = Variable(torch.LongTensor(np.where(qvpos > 0, 1, 0)))
-                qnloc = Variable(torch.LongTensor(np.where(qnpos > 0, 1, 0)))
+                # qupos = Variable(torch.LongTensor(upos[2]))
+                # qvpos = Variable(torch.LongTensor(vpos[2]))
+                # qnpos = Variable(torch.LongTensor(npos[2]))
+                # qpos = [qupos, qvpos, qnpos]
 
-                quemb = Variable(torch.FloatTensor(dl.qid2vec(qupos)))
-                qvemb = Variable(torch.FloatTensor(dl.qid2vec(qvpos)))
-                qnemb = Variable(torch.FloatTensor(dl.qid2vec(qnpos)))
+                qu_wc = dl.qid2vec_padded(upos[2])
+                qv_wc = dl.qid2vec_padded(vpos[2])
+                qn_wc = dl.qid2vec_padded(npos[2])
+
+                qulen = dl.qid2vec_len(upos[2])
+                qvlen = dl.qid2vec_len(vpos[2])
+                qnlen = dl.qid2vec_len(npos[2])
+
+                qu_wc = Variable(torch.FloatTensor(qu_wc).view(-1, dl.PAD_LEN, 300))
+                qv_wc = Variable(torch.FloatTensor(qv_wc).view(-1, dl.PAD_LEN, 300))
+                qn_wc = Variable(torch.FloatTensor(qn_wc).view(-1, dl.PAD_LEN, 300))
+                qulen = Variable(torch.LongTensor(qulen))
+                qvlen = Variable(torch.LongTensor(qvlen))
+                qnlen = Variable(torch.LongTensor(qnlen))
+
+                qinfo = [qu_wc, qv_wc, qn_wc, qulen, qvlen, qnlen]
 
                 # aqr: R, A, Q
-                rank_r, rank_a = dl.uid2index(aqr[:, 0]), \
-                                 dl.uid2index(aqr[:, 1])
-                rank_acc = dl.uid2index(accqr)
-                rank_q = aqr[:, 2]
 
-                rank_a_var = Variable(torch.LongTensor(rank_a))
-                rank_acc_var = Variable(torch.LongTensor(rank_acc))
-                rank_r_var = Variable(torch.LongTensor(rank_r))
-                rank_q_emb = Variable(torch.FloatTensor(dl.qid2vec(rank_q)))
+                rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
+                rank_a = Variable(torch.LongTensor(dl.uid2index(aqr[:, 1])))
+                rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))
+                rank_q_wc= dl.qid2vec_padded(aqr[:, 2])
+                rank_q_len = dl.qid2vec_len(aqr[:, 2])
+                rank_q = Variable(torch.FloatTensor(rank_q_wc).view(-1, dl.PAD_LEN, 300))
+                rank_q_len = Variable(torch.LongTensor(rank_q_len))
 
-                # === ALL INPUT PROCESS ARE BEFORE THIS LINE ===
+                # rank_q = Variable(torch.LongTensor(aqr[:, 2]))
+                rank = [rank_r, rank_a, rank_acc, rank_q, rank_q_len]
+
                 if torch.cuda.is_available():
-                    rupos = rupos.cuda()
-                    rvpos = rvpos.cuda()
-                    rnpos = rnpos.cuda()
-                    aupos = aupos.cuda()
-                    avpos = avpos.cuda()
-                    anpos = anpos.cuda()
-                    quloc = quloc.cuda()
-                    qvloc = qvloc.cuda()
-                    qnloc = qnloc.cuda()
-                    quemb = quemb.cuda()
-                    qvemb = qvemb.cuda()
-                    qnemb = qnemb.cuda()
-
-                    rank_a_var = rank_a_var.cuda()
-                    rank_acc_var = rank_acc_var.cuda()
-                    rank_r_var = rank_r_var.cuda()
-                    rank_q_emb = rank_q_emb.cuda()
+                    rpos = [x.cuda() for x in rpos]
+                    apos = [x.cuda() for x in apos]
+                    # qpos = [x.cuda() for x in qpos]
+                    qinfo = [x.cuda() for x in qinfo]
+                    rank = [x.cuda() for x in rank]
 
                 optimizer.zero_grad()
 
-                loss = model(rupos, rvpos, rnpos,
-                             aupos, avpos, anpos,
-                             quloc, qvloc, qnloc,
-                             quemb, qvemb, qnemb,
-                             nsample,
-                             rank_a_var,
-                             rank_acc_var,
-                             rank_r_var,
-                             rank_q_emb)  # TODO: fill in this
+                # loss and rank_loss, the later for evaluation
+                loss = model(rpos=rpos, apos=apos, qinfo=qinfo,
+                             # qpos=qpos,
+                             rank=rank, nsample=nsample, dl=dl,
+                             test_data=None)
 
+                loss.backward()
                 optimizer.step()
+
+                epoch_total_loss += loss.data[0]  # type(loss) = Variable
+                iter += 1
 
                 # Save model
                 # torch.save(model.state_dict(), "path here")
 
-            # TODO: evaluate
+            print("Epoch-{:d} Loss sum: {}".format(epoch, epoch_total_loss))
+            model.eval()
+            MRR, pak = self.__validate()
+            print("Validation at Epoch-{:d}, \n\tMRR-{:.5f}, Precision@{:d}-{:.5f}"
+                  .format(epoch, MRR, self.prec_k, pak))
 
-        self.evaluate()
+
         print("Optimization Finished!")
 
-    def evaluate(self):
-        print("Evaluation under construction.")
-        pass
-        # TODO: implement here
+    def __validate(self):
+        dl = self.dl
+        model = self.model
+        tbatch = dl.build_test_batch(test_prop=self.test_prop,
+                                     test_neg_ratio=self.neg_test_ratio)
+        MRR, prec_K = 0, 0
+        tbatch_len = len(tbatch)
+
+        # The format of tbatch is:
+        #   [aids], rid, qid, accid
+        for rid, qid, accid, aid_list in tbatch:
+            rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
+            print("aid_list", aid_list)
+            print(rank_a)
+            rep_rid = [rid] * len(aid_list)
+            rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
+            print("qid", qid)
+            rank_q_len= dl.q2len(qid)
+            print("rank_q_len", rank_q_len) 
+            # TODO: modify rank_r
+            rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)))
+
+            if torch.cuda.is_available():
+                rank_a = rank_a.cuda()
+                rank_r = rank_r.cuda()
+                rank_q = rank_q.cuda()
+            score = model(rpos=None, apos=None, qinfo=None,
+                          rank=None, nsample=None, dl=dl,
+                          test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
+            print("rank_r", rank_r)
+            print("None type not iteratble", aid_list, score, accid)
+            RR, prec = dl.perform_metric(aid_list, score, accid, self.prec_k)
+            MRR += RR
+            prec_K += prec
+
+        MRR, prec_K= MRR / tbatch_len, prec_K / tbatch_len
+        return MRR, prec_K
+
 
     def test(self):
         print("Testing under construction.")
@@ -163,3 +216,4 @@ class PDER:
 if __name__ == "__main__":
     pder = PDER() # TODO: implement here
     pder.train()
+    pder.test()

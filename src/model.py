@@ -1,4 +1,5 @@
 """
+            irint("check point 1, epoch", epoch)
 
     Model file
 
@@ -12,8 +13,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from data_loader import DataLoader
-
 from collections import OrderedDict
 
 
@@ -23,16 +22,16 @@ class NeRank(nn.Module):
 
     Heterogeneous Entity Embedding Based Recommendation
     """
-    def __init__(self, embedding_dim, vocab_size, lstm_layers):
+    def __init__(self, embedding_dim, vocab_size, lstm_layers,
+                 cnn_channel, lambda_):
         super(NeRank, self).__init__()
-
-        # u and v of vector of R, we will use u in the end
         self.emb_dim = embedding_dim
-
         self.lstm_layers = lstm_layers
+        self.lambda_=lambda_
+
         self.ru_embeddings = nn.Embedding(vocab_size,
-                                         embedding_dim,
-                                         sparse=False)
+                                          embedding_dim,
+                                          sparse=False)
         self.rv_embeddings = nn.Embedding(vocab_size,
                                           embedding_dim,
                                           sparse=False)
@@ -42,48 +41,44 @@ class NeRank(nn.Module):
         self.av_embeddings = nn.Embedding(vocab_size,
                                           embedding_dim,
                                           sparse=False)
-        self.embedding_dim = embedding_dim
         self.init_emb()
-        self.hc = self.init_hc()
 
-
-        self.ubirnn = nn.LSTM(input_size=embedding_dim,
+        self.ubirnn = nn.LSTM(input_size=300,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
                               batch_first=True,
-                              bidirectional=True)
-        self.vbirnn = nn.LSTM(input_size=embedding_dim,
+                              bidirectional=False)
+        self.vbirnn = nn.LSTM(input_size=300,
                               hidden_size=embedding_dim,
                               num_layers=self.lstm_layers,
                               batch_first=True,
-                              bidirectional=True)
+                              bidirectional=False)
 
-        # TODO: set up the size of the out_channel
-        out_cha = 32
+        self.out_channel = cnn_channel
         self.convnet1 = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(1, out_cha, kernel_size=(1, embedding_dim))),
+            ('conv1', nn.Conv2d(1, self.out_channel, kernel_size=(1, embedding_dim))),
             ('relu1', nn.ReLU()),
             ('pool1', nn.MaxPool2d(kernel_size=(3, 1)))
         ]))
 
         self.convnet2 = nn.Sequential(OrderedDict([
-            ('conv2', nn.Conv2d(2, out_cha, kernel_size=(2, embedding_dim))),
+            ('conv2', nn.Conv2d(1, self.out_channel, kernel_size=(2, embedding_dim))),
             ('relu2', nn.ReLU()),
             ('pool2', nn.MaxPool2d(kernel_size=(2, 1)))
         ]))
 
         self.convnet3 = nn.Sequential(OrderedDict([
-            ('conv3', nn.Conv2d(3, out_cha, kernel_size=(3, embedding_dim))),
+            ('conv3', nn.Conv2d(1, self.out_channel, kernel_size=(3, embedding_dim))),
             ('relu3', nn.ReLU())
         ]))
 
-        self.fc1 = nn.Linear(out_cha, 1)
-        self.fc2 = nn.Linear(out_cha, 1)
-        self.fc3 = nn.Linear(out_cha, 1)
+        self.fc1 = nn.Linear(self.out_channel, 1)
+        self.fc2 = nn.Linear(self.out_channel, 1)
+        self.fc3 = nn.Linear(self.out_channel, 1)
 
     def init_emb(self):
         """Initialize R and A embeddings"""
-        initrange = 0.5 / self.embedding_dim
+        initrange = 0.5 / self.emb_dim
         self.ru_embeddings.weight.data.uniform_(-initrange, initrange)
         self.ru_embeddings.weight.data[0].zero_()
         self.rv_embeddings.weight.data.uniform_(-0, 0)
@@ -91,110 +86,167 @@ class NeRank(nn.Module):
         self.ru_embeddings.weight.data[0].zero_()
         self.av_embeddings.weight.data.uniform_(-0, 0)
 
-    def init_hc(self):
-        h = Variable(torch.zeros(self.lstm_layers * 2, 1, self.embedding_dim))
-        c = Variable(torch.zeros(self.lstm_layers * 2, 1, self.embedding_dim))
+    def init_hc(self, batch_size):
+        h = Variable(
+                torch.zeros(self.lstm_layers, batch_size, self.emb_dim))
+        c = Variable(
+                torch.zeros(self.lstm_layers, batch_size, self.emb_dim))
         if torch.cuda.is_available():
             (h, c) = (h.cuda(), c.cuda())
         return h, c
 
-    def forward(self, rupos, rvpos, rnpos, aupos, avpos, anpos,
-                      quloc, qvloc, qnloc, quemb, qvemb, qnemb,
-                      nsample,
-                      rank_a, rank_acc, rank_r, rank_q_emb):
-        """
-        forward algorithm for NeRank,
-        quloc, qvloc, qnloc are locations in a vector of u, v,
-            and negative samples where there is a question text.
-        quemb, qvemb, qnemb are the word embedding piles of that
-        """
+    def forward(self, rpos, apos, qinfo, rank, nsample, dl, test_data, train=True):
+        if train:
+            embed_ru = self.ru_embeddings(rpos[0])
+            embed_au = self.au_embeddings(apos[0])
 
-        """
-            === Network Embedding Part ===
-        """
-        embed_ru = self.ru_embeddings(rupos)
-        embed_au = self.au_embeddings(aupos)
-        embed_rv = self.rv_embeddings(rvpos)
-        embed_av = self.av_embeddings(avpos)
+            embed_rv = self.rv_embeddings(rpos[1])
+            embed_av = self.av_embeddings(apos[1])
 
-        # quemb here is just the concatenation of word vectors
-        #   after this step, everything is equal length
+            neg_embed_rv = self.rv_embeddings(rpos[2])
+            neg_embed_av = self.av_embeddings(apos[2])
 
-        _, (lstm_quemb_hidden, _) = self.ubirnn(quemb.unsqueeze(1), self.hc)
+            quinput, qvinput, qninput = qinfo[:3]
+            qulen, qvlen, qnlen = qinfo[3:]
 
-        embed_qu = torch.matmul(torch.diag(quloc), lstm_quemb_hidden)
+            # First, pad 0 at left
+            # Second, expand the qxlen
+            # Third, apply gather
+            # Note: lstm output shape: B x Seq_len x (hidden_size * #_dir)
 
-        _, (lstm_qvemb_hidden, _) = self.vbirnn(qvemb.unsqueeze(1), self.hc)
-        embed_qv = torch.matmul(torch.diag(qvloc), lstm_qvemb_hidden)
+            u_output, _ = self.ubirnn(quinput, self.init_hc(nsample))
+            v_output, _ = self.vbirnn(qvinput, self.init_hc(nsample))
+            n_output, _ = self.vbirnn(qninput, 
+                    self.init_hc(qninput.size(0)))
 
-        embed_u = embed_ru + embed_au + embed_qu
-        embed_v = embed_rv + embed_av + embed_qv
+            u_pad = Variable(torch.zeros(u_output.size(0), 1, u_output.size(2)))
+            v_pad = Variable(torch.zeros(v_output.size(0), 1, v_output.size(2)))
+            n_pad = Variable(torch.zeros(n_output.size(0), 1, n_output.size(2)))
 
-        score = torch.mul(embed_u, embed_v)
-        score = torch.sum(score)
+            if torch.cuda.is_available():
+                u_pad = u_pad.cuda()
+                v_pad = v_pad.cuda()
+                n_pad = n_pad.cuda()
 
-        log_target = F.logsigmoid(score).squeeze()
+            u_output = torch.cat((u_pad, u_output), 1)
+            v_output = torch.cat((v_pad, v_output), 1)
+            n_output = torch.cat((n_pad, n_output), 1)
 
-        neg_embed_rv = self.rv_embeddings(rnpos)
-        neg_embed_av = self.av_embeddings(anpos)
+            qulen = qulen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
+            qvlen = qvlen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
+            qnlen = qnlen.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
 
-        _, (lstm_qnemb_hidden, _) = self.vbirnn(qnemb.unsqueeze(1), self.hc)
-        neg_embed_qv = torch.matmul(torch.diag(qnloc), lstm_qnemb_hidden)
+            embed_qu = u_output.gather(1, qulen.detach())
+            embed_qv = v_output.gather(1, qvlen.detach())
+            neg_embed_qv = n_output.gather(1, qnlen.detach())
 
-        neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv
-        neg_embed_v = neg_embed_v.view(nsample, self.emb_dim, -1)
+            # TODO: check correctness
 
-        """
-        Some notes around here.
-        * unsqueeze(): add 1 dim in certain position
-        * squeeze():   remove all 1 dims. E.g. (4x1x2x4x1) -> (4x2x4)
-        * Explain the dimension:
-            bmm: batch matrix-matrix product.
-                batch1 - b x n x m
-                batch2 - b x m x p
-                return - b x n x p
-            Here:
-                neg_embed_v - 2*batch_size*window_size x count x emb_dim
-                embed_u     - 2*batch_size*window_size x emb_dim
-                embed_u.unsqueeze(2)
-                            - 2*batch_size*window_size x emb_dim x 1
-                bmm(.,.)    - 2*batch_size*window_size x count x 1
-                bmm(.,.).squeeze()
-                            - 2*batch_size*window_size x count
-        * Input & Output of nn.Embeddings:
-            In : LongTensor(N,M)
-            Out: (N, W, embedding_dim)
-        """
+            embed_u = embed_ru + embed_au + embed_qu.squeeze()
+            embed_v = embed_rv + embed_av + embed_qv.squeeze()
 
-        neg_score = torch.bmm(neg_embed_v, embed_u.unsqueeze(2)).squeeze()
-        neg_score = torch.sum(neg_score)
-        sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
+            score = torch.mul(embed_u, embed_v)
+            score = torch.sum(score)
 
-        ne_loss = log_target + sum_log_sampled
+            log_target = F.logsigmoid(score).squeeze()
 
-        """
-            === Ranking ===
-        """
+            neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv.squeeze()
+            neg_embed_v = neg_embed_v.view(nsample, -1, self.emb_dim)
 
-        emb_rank_acc = self.au_embeddings(rank_acc)
-        emb_rank_a = self.au_embeddings(rank_a)
-        emb_rank_r = self.ru_embeddings(rank_r)
-        emb_rank_q = self.ubirnn(rank_q_emb)
+            """
+            Some notes around here.
+            * unsqueeze(): add 1 dim in certain position
+            * squeeze():   remove all 1 dims. E.g. (4x1x2x4x1) -> (4x2x4)
+            * Explain the dimension:
+                bmm: batch matrix-matrix product.
+                    batch1 - b x n x m
+                    batch2 - b x m x p
+                    return - b x n x p
+                Here:
+                    neg_embed_v - 2*batch_size*window_size x count x emb_dim
+                    embed_u     - 2*batch_size*window_size x emb_dim
+                    embed_u.unsqueeze(2)
+                                - 2*batch_size*window_size x emb_dim x 1
+                    bmm(.,.)    - 2*batch_size*window_size x count x 1
+                    bmm(.,.).squeeze()
+                                - 2*batch_size*window_size x count
+            * Input & Output of nn.Embeddings:
+                In : LongTensor(N,M)
+                Out: (N, W, embedding_dim)
+            """
 
-        low_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a],
-                                   dim=1)
-        high_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_acc],
-                                    dim=1)
+            neg_score = torch.bmm(neg_embed_v, embed_u.unsqueeze(2)).squeeze()
+            neg_score = torch.sum(neg_score)
+            sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
-        low_score = self.fc1(self.convnet1(low_rank_mat)) \
-                  + self.fc2(self.convnet2(low_rank_mat)) \
-                  + self.fc3(self.convnet3(low_rank_mat))
+            ne_loss = log_target + sum_log_sampled
 
-        high_score = self.fc3(self.convnet1(high_rank_mat)) \
-                   + self.fc2(self.convnet2(high_rank_mat)) \
-                   + self.fc3(self.convnet3(high_rank_mat))
+            """
+                === Ranking ===
+            """
 
-        rank_loss = low_score - high_score
+            emb_rank_r = self.ru_embeddings(rank[0])
+            emb_rank_a = self.au_embeddings(rank[1])
+            emb_rank_acc = self.au_embeddings(rank[2])
+            rank_q, rank_q_len = rank[3], rank[4]
 
-        loss = ne_loss + rank_loss
-        return loss
+            rank_q_output, _ = self.ubirnn(
+                    rank_q, self.init_hc(rank_q.size(0)))
+            rank_q_pad = Variable(torch.zeros(
+                rank_q_output.size(0), 1, rank_q_output.size(2))).cuda()
+            rank_q_output = torch.cat((rank_q_pad, rank_q_output), 1)
+            rank_q_len = rank_q_len.unsqueeze(1).expand(-1, self.emb_dim).unsqueeze(1)
+            emb_rank_q = rank_q_output.gather(1, rank_q_len.detach())
+
+            low_rank_mat = torch.stack(
+                    [emb_rank_r, emb_rank_q.squeeze(), emb_rank_a], dim=1)
+            low_rank_mat = low_rank_mat.unsqueeze(1)
+            high_rank_mat = torch.stack(
+                    [emb_rank_r, emb_rank_q.squeeze(), emb_rank_acc], dim=1)
+            high_rank_mat = high_rank_mat.unsqueeze(1)
+
+            low_score = self.fc1(self.convnet1(low_rank_mat).view(-1, self.out_channel)) \
+                      + self.fc2(self.convnet2(low_rank_mat).view(-1, self.out_channel)) \
+                      + self.fc3(self.convnet3(low_rank_mat).view(-1, self.out_channel))
+
+            high_score = self.fc1(self.convnet1(high_rank_mat).view(-1, self.out_channel)) \
+                       + self.fc2(self.convnet2(high_rank_mat).view(-1, self.out_channel)) \
+                       + self.fc3(self.convnet3(high_rank_mat).view(-1, self.out_channel))
+
+            rank_loss = torch.sum(low_score - high_score)
+
+            loss = F.sigmoid(ne_loss) + self.lambda_ * F.sigmoid(rank_loss)
+            print("The loss is {}".format(loss.data[0]))
+            return loss
+        else:
+            # test_a, _r, _q all variables
+            test_a, test_r, test_q, test_q_len = test_data
+            a_size = test_a.size(0)
+
+            # The test_a and test_r are vectors
+            emb_rank_a = self.au_embeddings(test_a)
+            emb_rank_r = self.ru_embeddings(test_r)
+
+            test_q_output, _ = self.ubirnn(test_q.unsqueeze(0), self.init_hc(1))
+            print("test_q_output.shape", test_q_output.shape)
+
+            ind = Variable(torch.LongTensor([test_q_len])).cuda()
+            print("ind", ind)
+            test_q_target_output = torch.index_select(test_q_output.squeeze(), 0, ind)
+
+            print("test_q_target_output.shape", test_q_target_output.shape)
+            emb_rank_q = test_q_target_output.squeeze()\
+                    .repeat(a_size).view(a_size, self.emb_dim)
+            print(emb_rank_q.shape)
+
+            emb_rank_mat = torch.stack([emb_rank_r, emb_rank_q, emb_rank_a], dim=1)
+            emb_rank_mat = emb_rank_mat.unsqueeze(1)
+            print(emb_rank_mat.shape)
+            score = self.fc1(self.convnet1(emb_rank_mat).view(-1, self.out_channel)) \
+                  + self.fc2(self.convnet2(emb_rank_mat).view(-1, self.out_channel)) \
+                  + self.fc3(self.convnet3(emb_rank_mat).view(-1, self.out_channel))
+
+            # print("Test score shape", score.shape)
+            ret_score = score.data.squeeze().tolist()
+            print(ret_score)
+            return ret_score
