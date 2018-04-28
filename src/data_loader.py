@@ -17,17 +17,25 @@ data_index = 0
 test_index = 0
 
 class DataLoader():
-    def __init__(self, dataset, include_content, mp_coverage, mp_length):
+    def __init__(self, dataset, id, 
+                 include_content, mp_coverage, mp_length):
         print("Initializing data_loader ...")
         self.PAD_LEN = 24
+        self.id = id
         self.dataset = dataset
+
+        self.PERF_DIR = os.getcwd() + "/performance/"
+        self.perf_file = self.PERF_DIR + self.dataset + "_" \
+                + str(self.id) + "_" + str(mp_length) \
+                + "_" + str(mp_coverage) + ".txt"
+
         self.include_content = include_content
         self.mpfile = os.getcwd() \
                 + "/metapath/"+ self.dataset + "_" + str(mp_coverage) \
                 + "_" + str(mp_length) + ".txt" 
         self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
 
-        print("\tloading dataset ...")
+        print("\tloading dataset ..." + self.mpfile)
         data = self.__read_data()
         self.train_data = data
         print("\tcounting dataset ...")
@@ -472,7 +480,7 @@ class DataLoader():
                 test_set.append((rid, qid, accid, aids))
         return test_set
 
-    def build_test_batch(self, test_prop, test_neg_ratio):
+    def build_test_batch(self, test_prop):
         """
         Build a batch for test
 
@@ -532,7 +540,10 @@ class DataLoader():
         id_score_pair.sort(key=lambda x: x[1], reverse=True)
         for ind, (aid, score) in enumerate(id_score_pair):
             if aid == accid:
-                return 1/(ind+1), int(ind < k)
+                if ind == 0:
+                    return 1/(ind+1), int(ind < k), 1
+                else:
+                    return 1/(ind+1), int(ind < k), 0
 
     def qid2vec_padded(self, qid_list):
         """
@@ -577,6 +588,14 @@ class DataLoader():
                 else:
                     test_qa[qid].append(aid)
         return test_qa
+    
+    def write_perf_tofile(self, msg):
+        if not os.path.exists(self.PERF_DIR):
+            os.mkdir(self.PERF_DIR)
+            with open(self.perf_file,"w") as fout:
+                print("Epoch,Iter,MRR,hit_K,pa1", file=fout)
+        with open(self.perf_file, "a") as fout:
+            print(msg, file=fout)
 
 if __name__ == "__main__":
     test = DataLoader(dataset="3dprinting")

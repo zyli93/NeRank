@@ -5,7 +5,7 @@ from pder import PDER
 import os, sys
 from optparse import OptionParser
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+# :os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 
 def runPDER(options):
 
@@ -19,7 +19,7 @@ def runPDER(options):
         preprocess_(dataset=options.dataset,
                     threshold=options.test_threshold,
                     prop_test=options.proportion_test,
-                    ratio=options.neg_test_ratio)
+                    sample_size=options.test_size)
 
     # preprocessing
     if options.gen_mp:
@@ -46,10 +46,12 @@ def runPDER(options):
         cnn_channel=options.cnn_channel,
         lambda_=options.lambda_,
         prec_k=options.prec_k,
-        test_prop=options.proportion_test,
-        neg_test_ratio=options.neg_test_ratio,
+        test_ratio=options.test_ratio,
+        # test_prop=options.proportion_test,
+        # neg_test_ratio=options.neg_test_ratio,
         mp_length=options.length,
-        mp_coverage=options.coverage
+        mp_coverage=options.coverage,
+        id=options.id
     )
 
     pder_model.train()
@@ -60,9 +62,9 @@ def runPDER(options):
 if __name__ == '__main__':
     """Generating random walks and output to file
     
-    [a, b, c, d, e, f, g, h, [i], [j], k, 
-     l, m, n, o, p, [q], r, [s], t, u, [v],
-     [w], [x], y, z]
+    [a, b, c, d, e, f, g, h, i, [j], k, 
+     l, m, n, o, p, q, r, [s], t, u, v,
+     [w], x, y, z]
 
     Args:
         -d, --dataset (str)
@@ -171,9 +173,17 @@ if __name__ == '__main__':
                       dest="prec_k", default=3,
                       help="The hyperparam to test Precision@K.")
     
-    parser.add_option("-x", "--neg_test_ratio", type="int",
-                      dest="neg_test_ratio", default=2,
+    parser.add_option("-x", "--test-size", type="int",
+                      dest="test_size", default=2,
                       help="Random selected sample numbers in test batch")
+
+    parser.add_option("-i", "--id-number", type="int",
+                      dest="id", default=0,
+                      help="The identifier of a unique experiment")
+
+    parser.add_option("-q", "--test-ratio", type="float",
+                      dest="test_ratio", default=0.05,
+                      help="The ratio of test dataset used in the validation set")
 
 
     (options, args) = parser.parse_args()

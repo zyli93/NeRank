@@ -7,6 +7,7 @@
 """
 
 import os
+import datetime
 
 import torch
 from torch.autograd import Variable
@@ -21,13 +22,13 @@ class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
                  batch_size, window_size, neg_sample_ratio,
                  lstm_layers, include_content, lr, cnn_channel,
-                 test_prop, neg_test_ratio, lambda_, prec_k,
-                 mp_length, mp_coverage):
+                 test_ratio, lambda_, prec_k,
+                 mp_length, mp_coverage, id):
 
-        self.dl = DataLoader(dataset=dataset,
+        self.dataset = dataset
+        self.dl = DataLoader(dataset=dataset, id=id,
                              include_content=include_content,
-                             mp_coverage=mp_coverage,
-                             mp_length=mp_length)
+                             mp_coverage=mp_coverage, mp_length=mp_length)
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
         self.window_size = window_size
@@ -36,9 +37,9 @@ class PDER:
         self.lstm_layers = lstm_layers
         self.learning_rate = lr
 
-        self.test_prop = test_prop
+        self.test_prop = test_ratio
         self.prec_k = prec_k
-        self.neg_test_ratio = neg_test_ratio
+        self.id = id
 
         self.model_folder = os.getcwd() + "/model/"
 
@@ -51,30 +52,28 @@ class PDER:
     def train(self):
         dl = self.dl
         model = self.model
-        if torch.cuda.device_count() < 1:
+        if torch.cuda.device_count() > 1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
             model = nn.DataParallel(model)
         if torch.cuda.is_available():  # Check availability of cuda
+            print("Using device {}".format(torch.cuda.current_device()))
             model.cuda()
 
-        # TODO: Other learning algorithms
-        optimizer = optim.SGD(model.parameters(), lr=self.learning_rate)
+        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
 
         batch_count = 0
+        best_MRR, best_hit_K, best_pa1 = 0, 0, 0
         for epoch in range(self.epoch_num):
-            model.train()
             epoch_total_loss = 0
             dl.process = True
             iter = 0
 
             while dl.process:
-                print("Epoch-{}, Iteration-{}".format(epoch, iter), end="")
                 upos, vpos, npos, nsample, aqr, accqr \
                     = dl.generate_batch(
                         window_size=self.window_size,
                         batch_size=self.batch_size,
                         neg_ratio=self.neg_sample_ratio)
-                print("\tSample size", nsample)
 
                 """
                 In order to totally vectorize the computation, 
@@ -139,10 +138,10 @@ class PDER:
                 optimizer.zero_grad()
 
                 # loss and rank_loss, the later for evaluation
+                model.train()
                 loss = model(rpos=rpos, apos=apos, qinfo=qinfo,
                              rank=rank, nsample=nsample, dl=dl,
                              test_data=None)
-
                 loss.backward()
                 optimizer.step()
 
@@ -150,30 +149,64 @@ class PDER:
                 iter += 1
                 batch_count += 1
 
-                if batch_count % 2000 == 0:
-                    print("Saving params at batch-{}: Epoch-{}, iter-{}"
-                          .format(batch_count, epoch, iter))
-                    if not os.path.exists(self.model_folder):
-                        print("Creating Model folder")
-                        os.mkdir(self.model_folder)
-                    torch.save(model.state_dict(),
-                               self.model_folder + "model_E{}I{}".format(epoch, iter))
+                """
+                Ideas of printing validation, recording performance, 
+                    and dumping model.
+                    1 - Ea. 5: print epoch, iter, time 
+                    2 - Ea. 20: print iter, MRR, haK, pa1, sampled vald set
+                    3 - Ea. 100: record iMRR, haK, pa1, sampled vald set
+                    4 - Ea. 1000: check if better result, dump model, all valid set
+                    5 - ea. epoch: print, record
+                """
+                if iter % 10 == 0:
+                    print("Epoch-{}, Iter-{}".format(epoch, iter), end=" ")
+                    tr = datetime.datetime.now().isoformat()[8:24]
+                    print("Size-{} ".format(nsample) + tr, end=" ")
+                    print("Loss-{:.3f}".format(loss.data[0]))
 
-            print("Epoch-{:d} Loss sum: {}".format(epoch, epoch_total_loss))
-            model.eval()
-            MRR, pak = self.__validate()
-            print("Validation at Epoch-{:d}, \n\tMRR-{:.5f}, Precision@{:d}-{:.5f}"
-                  .format(epoch, MRR, self.prec_k, pak))
+                # if iter % 20 == 0:
+                #     iMRR, ihit_K, ipa1 = self.__validate(test_prop=self.test_prop)
+                #     print("\tSampled validate: iter-{}, MRR={:.4f}, hit_K={:.4f}, pa1={:.4f}"
+                #             .format(iter, iMRR, ihit_K, ipa1))
+                if batch_count % 10 == 0:
+                    hMRR, hhit_K, hpa1 = self.__validate()
+                    print("\tEntire validate: iter-{},  MRR={:.4f},  hit_K={:.4f},  pa1={:.4f}"
+                            .format(iter, hMRR, hhit_K, hpa1))
+                    msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
+                            .format(epoch, iter, hMRR, hhit_K, hpa1)
+                    dl.write_perf_tofile(msg=msg)
+
+                if iter % 1000 == 0:
+                    kMRR, khit_K, kpa1 = self.__validate()
+                    if sum([kMRR > best_MRR, khit_K > best_hit_K, kpa1 > best_pa1]) > 1:
+                        print("--->better pref: MRR-{:.6f}, hitK-{:.6f}, pa1-{:.6f}".
+                                format(kMRR, khit_K, kpa1))
+                        best_MRR, best_hit_K, best_pa1 = kMRR, khit_K, kpa1
+                        if not os.path.exists(self.model_folder):
+                            print("Creating Model folder")
+                            os.mkdir(self.model_folder)
+
+                        torch.save(model.state_dict(),
+                                   self.model_folder + self.dataset + "_" + \
+                                           str(self.id) + "_E{}I{}".format(epoch, iter))
+
+
+            eMRR, ehit_K, epa1 = self.__validate()
+            print("Vald@Epoch-{:d}, MRR-{:.6f}, hit_K-{:.6f}, pa1-{:.6f}"
+                  .format(epoch, eMRR, ehit_K, epa1))
+            msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
+                    .format(epoch, iter, eMRR, ehit_K, epa1)
+            dl.write_perf_tofile(msg=msg)
 
 
         print("Optimization Finished!")
 
-    def __validate(self):
+    def __validate(self, test_prop=None):
         dl = self.dl
         model = self.model
-        tbatch = dl.build_test_batch(test_prop=self.test_prop,
-                                     test_neg_ratio=self.neg_test_ratio)
-        MRR, prec_K = 0, 0
+        model.eval()
+        tbatch = dl.build_test_batch(test_prop=test_prop)
+        MRR, hit_K, prec_1 = 0, 0, 0
         tbatch_len = len(tbatch)
 
         # The format of tbatch is:  [aids], rid, qid, accid
@@ -191,12 +224,13 @@ class PDER:
             score = model(rpos=None, apos=None, qinfo=None,
                           rank=None, nsample=None, dl=dl,
                           test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
-            RR, prec = dl.perform_metric(aid_list, score, accid, self.prec_k)
+            RR, hit, prec = dl.perform_metric(aid_list, score, accid, self.prec_k)
             MRR += RR
-            prec_K += prec
+            hit_K += hit
+            prec_1 += prec
 
-        MRR, prec_K= MRR / tbatch_len, prec_K / tbatch_len
-        return MRR, prec_K
+        MRR, hit_K, prec_1 = MRR/tbatch_len, hit_K/tbatch_len, prec_1/tbatch_len
+        return MRR, hit_K, prec_1
 
 
     def test(self):

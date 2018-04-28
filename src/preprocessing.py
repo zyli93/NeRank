@@ -138,7 +138,7 @@ def split_post(raw_dir, data_dir):
     return
 
 
-def process_QA(parsed_dir, data_dir, threshold, prop_test, neg_ratio):
+def process_QA(parsed_dir, data_dir, threshold, prop_test, tsample_size):
     """Process QA
 
     Extract attributes used in this project
@@ -154,6 +154,7 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test, neg_ratio):
     OUTPUT_TEST = "test.txt"
     OUTPUT_TRAIN = "QAU_Map.json"
     OUTPUT_TEST_QA = "test_q_alist.txt"
+
 
     # Get logger to log exceptions
     logger = logging.getLogger(__name__)
@@ -246,17 +247,29 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test, neg_ratio):
             accid = qa_map[qid]['AcceptedAnswerId']
             aolist = qa_map[qid]['AnswerOwnerList']
             a_pos_samples = [x[1] for x in aolist]
-            n_neg_samples = int(neg_ratio * len(a_pos_samples))
-            a_neg_samples = random.sample(all_aid, n_neg_samples)
-            a_samples = a_neg_samples + a_pos_samples
-            a_samples = " ".join(random.shuffle(a_samples))
 
+            acc_uid = 0
             for answer_id, answer_owner_id in aolist:
                 print("{} {}".format(qid, answer_owner_id), file=fout_alist)
                 if answer_id == accid:
-                    print("{} {} {} {}"
-                          .format(rid, qid, accid, a_samples),
-                          file=fout_test)
+                    acc_uid = answer_owner_id
+                    break
+
+            if len(a_pos_samples) <= tsample_size:
+                n_neg_samples = tsample_size - len(a_pos_samples)
+                a_neg_samples = random.sample(all_aid, n_neg_samples)
+                a_samples = a_neg_samples + a_pos_samples
+            else:
+                a_samples = random.sample(a_pos_samples, tsample_size)
+                if acc_uid not in a_samples:
+                    a_samples.pop()
+                    a_samples.append(acc_uid)
+
+            random.shuffle(a_samples)
+            a_samples = " ".join(a_samples)
+
+            print("{} {} {} {}".format(rid, qid, acc_uid, a_samples),
+                  file=fout_test)
 
     # if qid is a test instance or qid doesn't have an answer
     for qid in qid_list:
@@ -273,7 +286,7 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test, neg_ratio):
 def extract_question_user(data_dir, parsed_dir):
     """Extract Question User pairs and output to file.
 
-    Extract "Q" and "R"
+    Extract "Q" and "R)"
 
     Format:
         <Qid> <Rid>
@@ -500,7 +513,7 @@ def write_part_users(parsed_dir):
             print("{}".format(user_id), file=fout)
 
 
-def preprocess_(dataset, threshold, prop_test, ratio):
+def preprocess_(dataset, threshold, prop_test, sample_size):
     DATASET = dataset
     RAW_DIR = os.getcwd() + "/raw/{}/".format(DATASET)
     DATA_DIR= os.getcwd() + "/data/{}/".format(DATASET)
@@ -548,7 +561,7 @@ def preprocess_(dataset, threshold, prop_test, ratio):
     print("\tProcessing QA")
     process_QA(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
                threshold=threshold, prop_test=prop_test,
-               neg_ratio=ratio)
+               tsample_size=sample_size)
 
     print("\tExtracting Q, R, A relations ...")
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
@@ -568,9 +581,10 @@ def preprocess_(dataset, threshold, prop_test, ratio):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 + 1:
-        print("\t Usage: {} [name of dataset]"
+        print("\t Usage: {} [name of dataset] [threshold] [prop of test] [test sample size]"
               .format(sys.argv[0]), file=sys.stderr)
         sys.exit(0)
     threshold = int(sys.argv[2])
     prop_test = float(sys.argv[3])
-    preprocess_(sys.argv[1], threshold, prop_test, ratio)
+    sample_size = int(sys.argv[4])
+    preprocess_(sys.argv[1], threshold, prop_test, sample_size)

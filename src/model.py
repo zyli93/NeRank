@@ -105,8 +105,8 @@ class NeRank(nn.Module):
             quinput, qvinput, qninput = qinfo[:3]
             qulen, qvlen, qnlen = qinfo[3:]
 
-            u_output, _ = self.ubirnn(quinput, self.init_hc(nsample))
-            v_output, _ = self.vbirnn(qvinput, self.init_hc(nsample))
+            u_output, _ = self.ubirnn(quinput, self.init_hc(quinput.size(0)))
+            v_output, _ = self.vbirnn(qvinput, self.init_hc(quinput.size(0)))
             n_output, _ = self.vbirnn(qninput, self.init_hc(qninput.size(0)))
 
             u_pad = Variable(torch.zeros(u_output.size(0), 1, u_output.size(2)))
@@ -141,7 +141,7 @@ class NeRank(nn.Module):
             log_target = F.logsigmoid(score).squeeze()
 
             neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv.squeeze()
-            neg_embed_v = neg_embed_v.view(nsample, -1, self.emb_dim)
+            neg_embed_v = neg_embed_v.view(quinput.size(0), -1, self.emb_dim)
 
             """
             Some notes around here.
@@ -150,7 +150,7 @@ class NeRank(nn.Module):
             * Explain the dimension:
                 bmm: batch matrix-matrix product.
                     batch1 - b x n x m
-                    batch2 - b x m x p
+                    quinput.size(0) - b x m x p
                     return - b x n x p
                 Here:
                     neg_embed_v - 2*batch_size*window_size x count x emb_dim
@@ -169,7 +169,7 @@ class NeRank(nn.Module):
             neg_score = torch.sum(neg_score)
             sum_log_sampled = F.logsigmoid(-1 * neg_score).squeeze()
 
-            ne_loss = log_target + sum_log_sampled
+            ne_loss = - (log_target + sum_log_sampled)
 
             """
                 === Ranking ===
@@ -204,8 +204,8 @@ class NeRank(nn.Module):
 
             rank_loss = torch.sum(low_score - high_score)
 
-            loss = F.sigmoid(ne_loss) + self.lambda_ * F.sigmoid(rank_loss)
-            print("The loss is {}".format(loss.data[0]))
+            # loss = F.sigmoid(ne_loss) + self.lambda_ * F.sigmoid(rank_loss)
+            loss = ne_loss + self.lambda_ * rank_loss
             return loss
         else:
             # test_a, _r, _q all variables

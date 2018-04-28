@@ -11,13 +11,13 @@ else
     PY=/home/zeyu/anaconda3/bin/python
 fi
 
-CUDA_VISIBLE_DEVICES=2,3,4
-$PY src/main.py --dataset 3dprinting \
-        --window-size 3 --neg-ratio 3.0 --embedding-dim 128 \
-        --lstm-layers 3 --epoch-number 2 --batch-size 5 \
-        --learning-rate 0.01 --cnn-channel 32 --lambda 1.5 \
-        --gen-metapaths --length 15 --coverage 3 --alpha 0.0 --metapaths "AQRQA" \
-        --preprocess --test-threshold 3 --proportion-test 0.1 \
-        --precision_at_K 4
+CUDA_VISIBLE_DEVICES=$1 $PY src/main.py --dataset $2 \
+        --window-size 5 --neg-ratio 5 --embedding-dim 128 \
+        --lstm-layers 1 --epoch-number 100 --batch-size 5 \
+        --learning-rate 0.001 --cnn-channel 32 --lambda 1.5 \
+        --length 32 --coverage $4 \
+        --precision_at_K 4 --id $3 --test-ratio 0.4
+        #--gen-metapaths --length 15 --coverage 3 --alpha 0.0 --metapaths "AQRQA" 
+        #--preprocess --test-threshold 3 --proportion-test 0.1 --test-size 20\
 
 
