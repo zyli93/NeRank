@@ -7,7 +7,8 @@ from torch.autograd import Variable
 
 import sys, os
 from data_loader import DataLoader
-from model import NeRank
+from model2 import NeRank
+from pder import PDER
 
 try:
     import ujson as json
@@ -27,7 +28,7 @@ def get_rqa_count(dl):
     nq = len(dl.qid2len.keys())
     nu = dl.user_count
     print("Dataset has Question:{} and User:{}"
-          .format(len(nq), len(nu)))
+          .format(nq, nu))
 
 def get_frequent_answerers(dataset, k, dl):
     qaufile = DATA + dataset + "QAU_Map.json"
@@ -56,42 +57,61 @@ def plot_key_a(key_a_ind, embed_mat, _id):
     plot_name = PLOTDIR + str(_id) + ".png"
     # Plot tSNE here
 
+def validate(dl, model, test_prop=None):
+    model.eval()
+    tbatch = dl.build_test_batch(test_prop=test_prop)
+    MRR, hit_K, prec_1 = 0, 0, 0
+    tbatch_len = len(tbatch)
+
+    # The format of tbatch is:  [aids], rid, qid, accid
+    for rid, qid, accid, aid_list in tbatch:
+        rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
+        rep_rid = [rid] * len(aid_list)
+        rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
+        rank_q_len= dl.q2len(qid)
+        rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)))
+
+        if torch.cuda.is_available():
+            rank_a = rank_a.cuda()
+            rank_r = rank_r.cuda()
+            rank_q = rank_q.cuda()
+        score = model(rpos=None, apos=None, qinfo=None,
+                      rank=None, nsample=None, dl=dl,
+                      test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
+        RR, hit, prec = dl.perform_metric(aid_list, score, accid, self.prec_k)
+        MRR += RR
+        hit_K += hit
+        prec_1 += prec
+
+    MRR, hit_K, prec_1 = MRR/tbatch_len, hit_K/tbatch_len, prec_1/tbatch_len
+    return MRR, hit_K, prec_1
+
 def main():
     # TODO: to be finished here
     """
     dataset - the dataset to test
-    k - # of records to mark an key-user
     _id - the ID number of the model
-    option - the option to do
-                [1] Draw tSNE
-                [2] Test non-question
     """
-    if len(sys.argv) < ? + 1:
+    if len(sys.argv) < 3 + 1:
         print("Lacking parameters!\n"
-              "\tUsage python {} [dataset] [Id] [k] [option]")
+              "\tUsage python {} [dataset] [Id] [model_name]".format(sys.argv[0]))
 
     dataset = sys.argv[1]
     _id = int(sys.argv[2])
-    k = int(sys.argv[3])
-    option = int(sys.argv[4])
+    model_name = sys.argv[3]
 
 
     get_rqa_count(dataset)
-    key_a_ind = get_frequent_answerers(dataset, k)
 
-    # TODO: load model
     dl = DataLoader(dataset=dataset, id=_id, include_content=False,
                     mp_length=32, mp_coverage=10)
     valid_model = NeRank(embedding_dim=128, vocab_size=dl.user_count,
                          lstm_layers=1, cnn_channel=32, lambda_=1.5)
-    model_name = "" # TODO: fill in model names
     valid_model.load_state_dict(torch.load(model_name))
+    print(validate(dl, valid_model, 1))
 
-    if option == 1:
-        embed_mat = valid_model.au_embeddings
-        plot_key_a(key_a_ind, embed_mat, _id)
-    elif option == 2:
-        pass
+
+
 
 
 
