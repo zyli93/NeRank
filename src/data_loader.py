@@ -18,54 +18,54 @@ test_index = 0
 
 class DataLoader():
     def __init__(self, dataset, id, 
-                 include_content, mp_coverage, mp_length):
+                 include_content, coverage, length):
         print("Initializing data_loader ...")
         self.PAD_LEN = 24
         self.id = id
         self.dataset = dataset
-
-        self.PERF_DIR = os.getcwd() + "/performance/"
-        self.perf_file = self.PERF_DIR + self.dataset + "_" \
-                + str(self.id) + "_" + str(mp_length) \
-                + "_" + str(mp_coverage) + ".txt"
-
         self.include_content = include_content
-        self.mpfile = os.getcwd() \
-                + "/metapath/"+ self.dataset + "_" + str(mp_coverage) \
-                + "_" + str(mp_length) + ".txt" 
-        self.datadir = os.getcwd() + "/data/parsed/" + self.dataset + "/"
+        self.process = True
 
-        print("\tloading dataset ..." + self.mpfile)
-        data = self.__read_data()
-        self.train_data = data
-        print("\tcounting dataset ...")
-        self.count = self.__count_dataset(data)
-        print("\tinitializing sample table ...")
+        self.corpus_path =\
+            os.getcwd() + "/corpus/" + "{}_{}_{}.txt".format(
+                self.dataset, str(coverage), str(length))
+
+        self.mpwalks_path =\
+            os.getcwd() + "/metapath/" + "{}_{}_{}.txt".format(
+                self.dataset, str(coverage), str(length))
+
+        self.DATA_DIR = os.getcwd() + "/data/parsed/{}/".format(self.dataset)
+
+        print("\tLoading dataset ..." + self.corpus_path)
+        self.data = self.__read_data()
+
+        print("\tCounting dataset ...")
+        self.count = self.__count_dataset()
+
+        print("\tInitializing sample table ...")
         self.sample_table = self.__init_sample_table()
-        print("\tloading word2vec model ...")
-        self.w2vmodel = self.__load_word2vec()  # **time consuming!**
-        print("\tloading questions ...")
-        self.qid2sen = self.__load_questions()
 
-        print("\tcreating user-index mapping ...")
+        print("\tLoading word2vec model ...")
+        self.w2vmodel = self.__load_word2vec()  # **time consuming!**
+
+        print("\tLoading questions text ...")
+        self.question_text = self.__load_question_text()
+
+        print("\tCreating user-index mapping ...")
         self.uid2ind, self.ind2uid = {}, {}
         self.user_count = self.__create_uid_index()
 
+        print("\tLoading rqa ...")
         self.q2r, self.q2acc, self.q2a = {}, {}, {}
         self.all_aid = []
-        print("\tloading rqa ...")
         self.__load_rqa()
 
-        print("\tcreating qid embeddings map ...")
+        print("\tCreating qid embeddings map ...")
         self.qid2emb, self.qid2len = {}, {}
-        self.__qid2embedding()
+        self.__get_question_embeddings()
 
-        print("\tloading test sets ...")
+        print("\tLoading test sets ...")
         self.testset = self.__load_test()
-        print("\tloading test set q-a pairs ...")
-        self.testqa = self.__load_test_qa()
-
-        self.process = True
 
         print("Done - Data Loader!")
 
@@ -77,12 +77,12 @@ class DataLoader():
         return:
             data  -  the metapath dataset
         """
-        with open(self.mpfile, "r") as fin:
+        with open(self.corpus, "r") as fin:
             lines = fin.readlines()
             data = [line.strip().split(" ") for line in lines]
             return data
 
-    def __count_dataset(self, data):
+    def __count_dataset(self):
         """
         read dataset and count the frequency
 
@@ -92,13 +92,15 @@ class DataLoader():
             count  - the sorted list of
         """
         count_dict = {}
-        for path in data:
+        with open(self.mp_walks, "r") as fin:
+            line = fin.readline()
+            path = line.strip().split(" ")
             for entity in path:
                 count_dict[entity] = count_dict.get(entity, 0) + 1
 
         # keys: entity id, values: count
         count = list(zip(count_dict.keys(), count_dict.values()))
-        count.sort(key=lambda x:x[1], reverse=True)
+        count.sort(key=lambda x: x[1], reverse=True)
         return count
 
     def __init_sample_table(self):
@@ -119,7 +121,7 @@ class DataLoader():
             sample_table += [self.count[i][0]] * count[i]
         return np.array(sample_table)
 
-    def generate_batch(self, window_size, batch_size, neg_ratio):
+    def get_train_batch(self, batch_size, neg_ratio):
         """
         get batch from the meta paths for the training of skip-gram
             model.
@@ -136,49 +138,98 @@ class DataLoader():
             vpos         -  the v vector positions (1d tensor)
             npos         -  the negative samples positions (2d tensor)
         """
-        data = self.train_data
+        data = self.data
         global data_index
-        pairs_list = []
 
-        batch = batch_size if batch_size + data_index < len(data) \
-            else len(data) - data_index
+        if batch_size + data_index < len(data):
+            batch_pairs = data[data_index: data_index + batch_size]
+            data_index += batch_size
+        else:
+            batch_pairs = data[data_index:]
+            data_index = 0
+            self.process = False
 
-        for i in range(batch):
-            pairs = self.__slide_through(data_index, window_size)
-            if data_index + 1 < len(data):
-                data_index += 1
-            else:  # meet the end of the dataset
-                self.process = False
-                data_index = 0
-                break
-            pairs_list += pairs
-
-        try:
-            u, v = zip(*pairs_list)
-        except:
-            print(pairs_list)
-            pass
+        u, v = zip(*batch_pairs)
         upos = self.__separate_entity(u)
         vpos = self.__separate_entity(v)
 
-        npairs_in_batch = len(pairs_list)
         neg_samples = np.random.choice(
             self.sample_table,
-            # first get a long neg sample list
-            # then after separating entity, reshape to 3xlxh
-            size=int(npairs_in_batch * neg_ratio))
-
-        # why:
-        #   instead of returning a mat, here it return a long np.array.
-        #   in the model, it reshape.
-        # npos = self.__separate_entity(neg_samples).reshape(
-        #     3,  # raq for 3 sub-matrices
-        #     npairs_in_batch * 2 * window_size,
-        #     int(npairs_in_batch * neg_ratio))
+            size=int(len(batch_pairs) * neg_ratio))
         npos = self.__separate_entity(neg_samples)
-
         aqr, accqr = self.get_acc_ind(upos, vpos)
-        return upos, vpos, npos, npairs_in_batch, aqr, accqr
+        return upos, vpos, npos, aqr, accqr
+
+    def get_test_batch(self, test_prop):
+        """
+        Build a batch for test
+
+        Args:
+            test_prop      -  the ratio of data fed to test,
+                               if None, use all batch
+            test_neg_ratio  -  the ratio of negative test instances,
+                               expected to be an integer
+
+        Returns:
+            A list of test data, formatted as follows:
+                trank_a - a list of answers (vector)
+                rid - the raiser ID (scalar)
+                qid - the question ID (scalar)
+                accaid - the accepted answer owner ID (scaler)
+        """
+        # total = self.testset.shape[0]
+        total = len(self.testset)
+        if test_prop:
+            batch_size = int(total * test_prop)
+            batch = random.sample(self.testset, batch_size)
+        else:
+            batch = self.testset
+        return batch
+
+    def get_acc_ind(self, upos, sample_rate):
+        """
+        This method is for Ranking CNN
+
+        Args:
+            upos  -  Label entity column
+            vpos  -  Context entity column
+        Return:
+            aqr   -  three cols list:
+                     A of upos, Q of vpos, R of this Q
+            acc   -  one col list:
+                     the Accepted answer in the corresponding pos
+
+        TODO:
+            For now, we only look at AQ pair. We can also implement
+            AR pair to list of Q's and sample some Q to construct tuples.
+            But those are left for future implementation.
+        WHY:
+        In upos and vpos, find all following pairs:
+            1 - "A-Q"
+            2 - "A-R" (Not implemented)
+        construct:
+            "A-R-Q", "A*-R-Q"
+        """
+        length = upos.shape[1]
+
+        # R: 0, A: 1, Q: 2
+        datalist = []
+        acclist = []
+
+        for i in range(length):
+            if upos[2][i]:
+                qid = upos[2][i]
+                aidlist = self.q2a[qid]
+                aid_samples = np.random.choice(
+                    aidlist, replace=True,
+                    size=int(len(aidlist) * sample_rate))
+
+                accaid = self.q2acc[qid]
+                rid = self.q2r[qid]
+                for x in aid_samples:
+                    datalist.append([rid, x, qid])
+                    acclist.append(accaid)
+        return np.array(datalist), np.array(acclist)
 
     def __separate_entity(self, entity_seq):
         """
@@ -201,35 +252,7 @@ class DataLoader():
             sep[ent_type][index] = ent_id
         return sep.astype(np.int64)
 
-    def __slide_through(self, ind, window_size):
-        """
-        sliding through one span, generate all pairs in it
-
-        args:
-            ind  -  the index of the label entity
-            window_size  -  the window_size of context
-        return:
-            the pair list
-        """
-        meta_path = self.train_data[ind]
-        pairs = []
-        for pos, token in enumerate(meta_path):
-            lcontext, rcontext = [], []
-            lcontext = meta_path[pos - window_size: pos] \
-                if pos - window_size >= 0 \
-                else meta_path[:pos]
-
-            if pos + 1 < len(meta_path):
-                rcontext = meta_path[pos + 1 : pos + window_size] \
-                    if pos + window_size < len(meta_path) \
-                    else meta_path[pos + 1 :]
-
-            context_pairs = [[token, context]
-                             for context in lcontext + rcontext]
-            pairs += context_pairs
-        return pairs
-
-    def __qid_to_concatenate_emb(self, qid):
+    def __question_len_emb(self, qid):
         """
         given qid, return the concatenated word vectors
 
@@ -243,7 +266,7 @@ class DataLoader():
         q_len = 0
         qvecs = [[0.0] * 300 for _ in range(self.PAD_LEN)]
         if qid:
-            question = self.qid2sen[qid]
+            question = self.question_text[qid]
             question = [x for x in question.strip().split(" ")
                           if x in self.w2vmodel.vocab]
             if question:
@@ -270,7 +293,7 @@ class DataLoader():
             fname=PATH, binary=True)
         return model
 
-    def __load_questions(self):
+    def __load_question_text(self):
         """
         Load question from dataset, "title" + "content",
             construct the qid2sen dictionary
@@ -279,8 +302,8 @@ class DataLoader():
             qid2sen  -  the qid:question dictionary
         """
 
-        qcfile = self.datadir + "Q_content_nsw.txt"
-        qtfile = self.datadir + "Q_title_nsw.txt"
+        qcfile = self.DATA_DIR + "Q_content_nsw.txt"
+        qtfile = self.DATA_DIR + "Q_title_nsw.txt"
 
         qid2sen = {}
 
@@ -308,16 +331,116 @@ class DataLoader():
             ind2uid  -  Index to User id dictionary
             len(lines)  -  How many users are there in the network
         """
-        uid_file = self.datadir + "part_users.txt"
+        uid_file = self.DATA_DIR + "QA_ID.txt"
         self.uid2ind[0] = 0
         self.ind2uid[0] = 0
         with open(uid_file, "r") as fin:
             lines = fin.readlines()
-            for ind, line in enumerate(lines):
-                uid = int(line.strip())
+            for line in lines:
+                ind, uid = line.strip().split(" ")
+                ind, uid = int(ind), int(uid)
                 self.uid2ind[uid] = ind
                 self.ind2uid[ind] = uid
             return len(lines)
+
+    def __load_rqa(self):
+        """
+        Loading files to create
+
+        Loading Question to Question Raiser ID: self.q2r
+                Question to Accepted Answer ID: self.q2acc
+                Question to Answer Owner ID: self.q2a (list)
+        Return:
+            (No return) Just modify the above three dict inplace.
+        """
+        QR_input = self.DATA_DIR + "Q_R.txt"
+        QACC_input = self.DATA_DIR + "Q_ACC_A.txt"
+        QA_input = self.DATA_DIR + "Q_A.txt"
+
+        aid_set = set()
+
+        with open(QR_input, "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                Q, R = [int(x) for x in line.strip().split(" ")]
+                self.q2r[Q] = R
+
+        with open(QACC_input, "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                Q, Acc = [int(x) for x in line.strip().split(" ")]
+                self.q2acc[Q] = Acc
+
+        with open(QA_input, "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                Q, A = [int(x) for x in line.strip().split(" ")]
+                aid_set.add(A)
+                if Q not in self.q2a:
+                    self.q2a[Q] = [A]
+                else:
+                    self.q2a[Q].append(A)
+        self.all_aid = list(aid_set)
+
+    def __get_question_embeddings(self):
+        """
+        Quickly load concatenated sentence vectors to from qid
+
+        Return:
+            qid2emb  -  the loaded map
+        """
+        for qid in self.question_text.keys():
+            qlen, qvecs = self.__question_len_emb(qid)
+            self.qid2emb[qid] = qvecs
+            self.qid2len[qid] = qlen
+        (zero_len, zero_vecs) = self.__question_len_emb(0)
+        self.qid2emb[0] = zero_vecs
+        self.qid2len[0] = zero_len 
+
+    def __load_test(self):
+        """
+        Load test set into memory
+        The format of test file is :
+            rid, qid, accid
+
+        Return:
+            test  -  list of test triples
+        """
+        test_file = self.DATA_DIR + "test.txt"
+        test_set = []
+        with open(test_file, "r") as fin:
+            lines = fin.readlines()
+            for line in lines:
+                test_data = [int(x) for x in line.strip().split()]
+                rid, qid, accid = test_data[:3]
+                aids = test_data[3:]
+                # rid, qid, accid = [int(x) for x in line.strip().split()]
+                test_set.append((rid, qid, accid, aids))
+        return test_set
+
+    def qid2padded_vec(self, qid_list):
+        """
+        Convert qid list to a padded sequence.
+        The padded length is hard coded into the class
+
+        Args:
+            qid_list  -  the list of qid
+        Returns:
+            padded array  -  the padded array
+        """
+        qvecs = [self.qid2emb[qid] for qid in qid_list]
+        return qvecs
+
+    def qid2vec_length(self, qid_list):
+        """
+        Convert qid list to list of len
+        Args:
+            qid_list  -  the list of qid
+        Returns:
+            len array  -  the list of len
+        """
+        qlens = [self.qid2len[qid] for qid in qid_list]
+        return qlens
 
     def uid2index(self, vec):
         """
@@ -347,255 +470,6 @@ class DataLoader():
         """
         vfunc = np.vectorize(lambda x: self.ind2uid[x])
         return vfunc(vec)
-
-    def __load_rqa(self):
-        """
-        Loading files to create
-
-        Loading Question to Question Raiser ID: self.q2r
-                Question to Accepted Answer ID: self.q2acc
-                Question to Answer Owner ID: self.q2a (list)
-        Return:
-            (No return) Just modify the above three dict inplace.
-        """
-        QR_input = self.datadir + "Q_R.txt"
-        QACC_input = self.datadir + "Q_ACC_A.txt"
-        QA_input = self.datadir + "Q_A.txt"
-
-        aid_set = set()
-
-        with open(QR_input, "r") as fin:
-            lines = fin.readlines()
-            for line in lines:
-                Q, R = [int(x) for x in line.strip().split(" ")]
-                self.q2r[Q] = R
-
-        with open(QACC_input, "r") as fin:
-            lines = fin.readlines()
-            for line in lines:
-                Q, Acc = [int(x) for x in line.strip().split(" ")]
-                self.q2acc[Q] = Acc
-
-        with open(QA_input, "r") as fin:
-            lines = fin.readlines()
-            for line in lines:
-                Q, A = [int(x) for x in line.strip().split(" ")]
-                aid_set.add(A)
-                if Q not in self.q2a:
-                    self.q2a[Q] = [A]
-                else:
-                    self.q2a[Q].append(A)
-        self.all_aid = list(aid_set)
-
-    def get_acc_ind(self, upos, vpos):
-        """
-        This method is for Ranking CNN
-
-        Args:
-            upos  -  Label entity column
-            vpos  -  Context entity column
-        Return:
-            aqr   -  three cols list:
-                     A of upos, Q of vpos, R of this Q
-            acc   -  one col list:
-                     the Accepted answer in the corresponding pos
-                     
-        TODO:
-            For now, we only look at AQ pair. We can also implement
-            AR pair to list of Q's and sample some Q to construct tuples.
-            But those are left for future implementation.
-        WHY:
-        In upos and vpos, find all following pairs:
-            1 - "A-Q"
-            2 - "A-R" (Not implemented)
-        construct:
-            "A-R-Q", "A*-R-Q"
-        """
-        length = upos.shape[1]
-
-        # R: 0, A: 1, Q: 2
-        datalist = []
-        acclist = []
-        for i in range(length):
-            if upos[1][i] and vpos[2][i]:
-                aid = upos[1][i]
-                qid = vpos[2][i]
-                # Check this AQ relationship make sence
-                if aid in self.q2a[qid]:
-                    accaid = self.q2acc[qid]
-                    rid = self.q2r[qid]
-                    datalist.append([rid, aid, qid])
-                    acclist.append(accaid)
-        return np.array(datalist), np.array(acclist)
-
-    def __qid2embedding(self):
-        """
-        Quickly load concatenated sentence vectors to from qid
-
-        Return:
-            qid2emb  -  the loaded map
-        """
-        for qid in self.qid2sen.keys():
-            qlen, qvecs = self.__qid_to_concatenate_emb(qid)
-            self.qid2emb[qid] = qvecs
-            self.qid2len[qid] = qlen
-        (zero_len, zero_vecs) = self.__qid_to_concatenate_emb(0)
-        self.qid2emb[0] = zero_vecs
-        self.qid2len[0] = zero_len 
-
-    def q2emb(self, qid):
-        """
-        Getter func of qid2emb
-        Args:
-            qid  -  Hello
-        """
-        return self.qid2emb[qid]
-    
-    def q2len(self, qid):
-        """
-        Getter func of qid2len
-        Args:
-            qid  - Hello
-        """
-        return self.qid2len[qid]
-
-    def __load_test(self):
-        """
-        Load test set into memory
-        The format of test file is :
-            rid, qid, accid
-
-        Return:
-            test  -  list of test triples
-        """
-        test_file = self.datadir + "test.txt"
-        test_set = []
-        with open(test_file, "r") as fin:
-            lines = fin.readlines()
-            for line in lines:
-                test_data = [int(x) for x in line.strip().split()]
-                rid, qid, accid = test_data[:3]
-                aids = test_data[3:]
-                # rid, qid, accid = [int(x) for x in line.strip().split()]
-                test_set.append((rid, qid, accid, aids))
-        return test_set
-
-    def build_test_batch(self, test_prop):
-        """
-        Build a batch for test
-
-        Args:
-            test_prop      -  the ratio of data fed to test,
-                               if None, use all batch
-            test_neg_ratio  -  the ratio of negative test instances,
-                               expected to be an integer
-
-        Returns:
-            A list of test data, formatted as follows:
-                trank_a - a list of answers (vector)
-                rid - the raiser ID (scalar)
-                qid - the question ID (scalar)
-                accaid - the accepted answer owner ID (scaler)
-        """
-        # total = self.testset.shape[0]
-        total = len(self.testset)
-        if test_prop:
-            batch_size = int(total * test_prop)
-            batch = random.sample(self.testset, batch_size)
-            # inds = np.arange(total)
-            # batch_inds = np.random.choice(inds, batch_size, replace=False)
-            # batch = self.testset[batch_inds]
-        else:
-            batch = self.testset
-
-        # test_batch = []
-        # for test_sample in batch:
-        #     rid, qid, accaid, aids = test_sample
-        #     alist = self.testqa[qid]
-        #     Sample some negative
-        #     neg_alist = np.random.choice(self.all_aid,
-        #                                  test_neg_ratio * len(alist),
-            #                              replace=False)
-            # trank_a = []
-            # for aid in alist + neg_alist.tolist():
-            #     trank_a.append(aid)
-            # test_batch.append([rid, qid, accaid, trank_a])
-        return batch
-
-    def perform_metric(self, aid_list, score_list, accid, k):
-        """
-        Performance metric evaluation
-
-        Args:
-            aid_list  -  the list of aid in this batch
-            score_list  -  the list of score of ranking
-            accid  -  the ground truth
-            k  -  precision at K
-        """
-        if len(aid_list) != len(score_list):
-            print("aid_list and score_list not equal length.",
-                  file=sys.stderr)
-            sys.exit()
-        id_score_pair = list(zip(aid_list, score_list))
-        id_score_pair.sort(key=lambda x: x[1], reverse=True)
-        for ind, (aid, score) in enumerate(id_score_pair):
-            if aid == accid:
-                if ind == 0:
-                    return 1/(ind+1), int(ind < k), 1
-                else:
-                    return 1/(ind+1), int(ind < k), 0
-
-    def qid2vec_padded(self, qid_list):
-        """
-        Convert qid list to a padded sequence.
-        The padded length is hard coded into the class
-
-        Args:
-            qid_list  -  the list of qid
-        Returns:
-            padded array  -  the padded array
-        """
-        qvecs = [self.qid2emb[qid] for qid in qid_list]
-        return qvecs
-
-    def qid2vec_len(self, qid_list):
-        """
-        Convert qid list to list of len
-        Args:
-            qid_list  -  the list of qid
-        Returns:
-            len array  -  the list of len
-        """
-        qlens = [self.qid2len[qid] for qid in qid_list]
-        return qlens
-    
-    def __load_test_qa(self):
-        """
-        Load answers list of questions in test set
-
-        Args:
-        Returns:
-            test_qa  -  the qa set of the test dataset
-        """
-        test_qa = {}
-        with open(self.datadir + "test_q_alist.txt", "r") as fin:
-            lines = fin.readlines()
-            for line in lines:
-                pair = [int(x) for x in line.strip().split(" ")]
-                qid, aid = pair[0], pair[1]
-                if qid not in test_qa:
-                    test_qa[qid] = [aid]
-                else:
-                    test_qa[qid].append(aid)
-        return test_qa
-    
-    def write_perf_tofile(self, msg):
-        if not os.path.exists(self.PERF_DIR):
-            os.mkdir(self.PERF_DIR)
-            with open(self.perf_file,"w") as fout:
-                print("Epoch,Iter,MRR,hit_K,pa1", file=fout)
-        with open(self.perf_file, "a") as fout:
-            print(msg, file=fout)
 
 if __name__ == "__main__":
     test = DataLoader(dataset="3dprinting")

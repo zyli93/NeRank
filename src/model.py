@@ -91,7 +91,7 @@ class NeRank(nn.Module):
             (h, c) = (h.cuda(), c.cuda())
         return h, c
 
-    def forward(self, rpos, apos, qinfo, rank, nsample, dl, test_data, train=True):
+    def forward(self, rpos, apos, qinfo, rank, dl, test_data, train=True):
         if train:
             embed_ru = self.ru_embeddings(rpos[0])
             embed_au = self.au_embeddings(apos[0])

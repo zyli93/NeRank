@@ -16,6 +16,7 @@ import torch.nn as nn
 
 from model import NeRank
 from data_loader import DataLoader
+from utils import Utils
 
 
 class PDER:
@@ -49,12 +50,13 @@ class PDER:
                             cnn_channel=cnn_channel,
                             lambda_=lambda_)
 
-    def train(self):
-        dl = self.dl
-        model = self.model
+    def run(self):
+        model, dl = self.model, self.dl
+
         if torch.cuda.device_count() > 1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
             model = nn.DataParallel(model)
+
         if torch.cuda.is_available():  # Check availability of cuda
             print("Using device {}".format(torch.cuda.current_device()))
             model.cuda()
@@ -63,30 +65,17 @@ class PDER:
 
         batch_count = 0
         best_MRR, best_hit_K, best_pa1 = 0, 0, 0
+
         for epoch in range(self.epoch_num):
             epoch_total_loss = 0
             dl.process = True
             iter = 0
 
             while dl.process:
-                upos, vpos, npos, nsample, aqr, accqr \
-                    = dl.generate_batch(
-                        window_size=self.window_size,
+                upos, vpos, npos, aqr, accqr \
+                    = dl.get_train_batch(
                         batch_size=self.batch_size,
                         neg_ratio=self.neg_sample_ratio)
-
-                """
-                In order to totally vectorize the computation, 
-                we use following method.
-                qupos, qvpos, qnpos are the positions and ids of the text.
-                qudiag, qvdiag, qndiag have 1 in cells 
-                where the corresponding cell in qupos
-                    (qvpos, qnpos) is not zero.
-                We use dot product to zero out those undesired columns.
-
-                Create the Variables, only Variables with LongTensor can be
-                  sent to nn.Embedding
-                """
 
                 # R-u, R-v, and R-n
                 rupos = Variable(torch.LongTensor(dl.uid2index(upos[0])))
@@ -100,13 +89,13 @@ class PDER:
                 anpos = Variable(torch.LongTensor(dl.uid2index(npos[1])))
                 apos = [aupos, avpos, anpos]
 
-                qu_wc = dl.qid2vec_padded(upos[2])
-                qv_wc = dl.qid2vec_padded(vpos[2])
-                qn_wc = dl.qid2vec_padded(npos[2])
+                qu_wc = dl.qid2padded_vec(upos[2])
+                qv_wc = dl.qid2padded_vec(vpos[2])
+                qn_wc = dl.qid2padded_vec(npos[2])
 
-                qulen = dl.qid2vec_len(upos[2])
-                qvlen = dl.qid2vec_len(vpos[2])
-                qnlen = dl.qid2vec_len(npos[2])
+                qulen = dl.qid2vec_length(upos[2])
+                qvlen = dl.qid2vec_length(vpos[2])
+                qnlen = dl.qid2vec_length(npos[2])
 
                 qu_wc = Variable(torch.FloatTensor(qu_wc).view(-1, dl.PAD_LEN, 300))
                 qv_wc = Variable(torch.FloatTensor(qv_wc).view(-1, dl.PAD_LEN, 300))
@@ -122,8 +111,8 @@ class PDER:
                 rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
                 rank_a = Variable(torch.LongTensor(dl.uid2index(aqr[:, 1])))
                 rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))
-                rank_q_wc= dl.qid2vec_padded(aqr[:, 2])
-                rank_q_len = dl.qid2vec_len(aqr[:, 2])
+                rank_q_wc= dl.qid2padded_vec(aqr[:, 2])
+                rank_q_len = dl.qid2vec_length(aqr[:, 2])
                 rank_q = Variable(torch.FloatTensor(rank_q_wc).view(-1, dl.PAD_LEN, 300))
                 rank_q_len = Variable(torch.LongTensor(rank_q_len))
 
@@ -140,7 +129,7 @@ class PDER:
                 # loss and rank_loss, the later for evaluation
                 model.train()
                 loss = model(rpos=rpos, apos=apos, qinfo=qinfo,
-                             rank=rank, nsample=nsample, dl=dl,
+                             rank=rank, dl=dl,
                              test_data=None)
                 loss.backward()
                 optimizer.step()
@@ -165,11 +154,11 @@ class PDER:
                     print("Loss-{:.3f}".format(loss.data[0]))
 
                 # if iter % 20 == 0:
-                #     iMRR, ihit_K, ipa1 = self.__validate(test_prop=self.test_prop)
+                #     iMRR, ihit_K, ipa1 = self.test(test_prop=self.test_prop)
                 #     print("\tSampled validate: iter-{}, MRR={:.4f}, hit_K={:.4f}, pa1={:.4f}"
                 #             .format(iter, iMRR, ihit_K, ipa1))
                 if batch_count % 10 == 0:
-                    hMRR, hhit_K, hpa1 = self.__validate()
+                    hMRR, hhit_K, hpa1 = self.test()
                     print("\tEntire validate: iter-{},  MRR={:.4f},  hit_K={:.4f},  pa1={:.4f}"
                             .format(iter, hMRR, hhit_K, hpa1))
                     msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
@@ -177,7 +166,7 @@ class PDER:
                     dl.write_perf_tofile(msg=msg)
 
                 if iter % 1000 == 0:
-                    kMRR, khit_K, kpa1 = self.__validate()
+                    kMRR, khit_K, kpa1 = self.test()
                     if sum([kMRR > best_MRR, khit_K > best_hit_K, kpa1 > best_pa1]) > 1:
                         print("--->better pref: MRR-{:.6f}, hitK-{:.6f}, pa1-{:.6f}".
                                 format(kMRR, khit_K, kpa1))
@@ -191,7 +180,7 @@ class PDER:
                                            str(self.id) + "_E{}I{}".format(epoch, iter))
 
 
-            eMRR, ehit_K, epa1 = self.__validate()
+            eMRR, ehit_K, epa1 = self.test()
             print("Vald@Epoch-{:d}, MRR-{:.6f}, hit_K-{:.6f}, pa1-{:.6f}"
                   .format(epoch, eMRR, ehit_K, epa1))
             msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
@@ -201,11 +190,11 @@ class PDER:
 
         print("Optimization Finished!")
 
-    def __validate(self, test_prop=None):
+    def test(self, test_prop=None):
         dl = self.dl
         model = self.model
         model.eval()
-        tbatch = dl.build_test_batch(test_prop=test_prop)
+        tbatch = dl.get_test_batch(test_prop=test_prop)
         MRR, hit_K, prec_1 = 0, 0, 0
         tbatch_len = len(tbatch)
 
@@ -222,9 +211,10 @@ class PDER:
                 rank_r = rank_r.cuda()
                 rank_q = rank_q.cuda()
             score = model(rpos=None, apos=None, qinfo=None,
-                          rank=None, nsample=None, dl=dl,
+                          rank=None, dl=dl,
                           test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
-            RR, hit, prec = dl.perform_metric(aid_list, score, accid, self.prec_k)
+            RR, hit, prec = Utils.performance_metrics(
+                aid_list, score, accid, self.prec_k)
             MRR += RR
             hit_K += hit
             prec_1 += prec
@@ -233,13 +223,6 @@ class PDER:
         return MRR, hit_K, prec_1
 
 
-    def test(self):
-        print("Testing under construction.")
-        pass
-        # TODO: implement here
-
-
 if __name__ == "__main__":
     pder = PDER() # TODO: implement here
-    pder.train()
-    pder.test()
+    pder.run()

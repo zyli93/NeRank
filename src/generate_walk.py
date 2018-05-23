@@ -13,6 +13,7 @@
 import os, sys
 import networkx as nx
 import random
+import numpy as np
 
 
 class MetaPathGenerator:
@@ -24,11 +25,14 @@ class MetaPathGenerator:
         num_walks   - the number of random walks start from each node
     """
 
-    def __init__(self, dataset, length=100, num_walks=10000):
+    def __init__(self, dataset, length=100, coverage=10000):
         self._walk_length = length
-        self._num_walks = num_walks
+        self._coverage = coverage
         self._dataset = dataset
         self.G = nx.Graph()
+
+        self.walks = []
+        self.pairs = []
 
         self.initialize()
 
@@ -102,7 +106,7 @@ class MetaPathGenerator:
             walks - a set of generated random walks
         """
         G = self.G
-        num_walks, walk_len = self._num_walks, self._walk_length
+        num_walks, walk_len = self._coverage, self._walk_length
         rand = random.Random(0)
 
         print("Generating Meta-paths ...")
@@ -132,9 +136,10 @@ class MetaPathGenerator:
                             pattern=meta_pattern))
 
         print("Done!")
-        return walks
+        self.walks = walks
+        return
 
-    def __meta_path_walk(self, start=None, alpha=0.0,pattern=None):
+    def __meta_path_walk(self, start=None, alpha=0.0, pattern=None):
         """Single Walk Generator
 
         Generating a single random walk that follows a meta path of `pattern`
@@ -200,7 +205,7 @@ class MetaPathGenerator:
 
         DATA_DIR = os.getcwd() + "/metapath/"
         OUTPUT = DATA_DIR + self._dataset + "_" \
-                + str(self._num_walks) + "_" + str(self._walk_length) + ".txt"
+                 + str(self._coverage) + "_" + str(self._walk_length) + ".txt"
         if not os.path.exists(DATA_DIR):
             os.mkdir(DATA_DIR)
         with open(OUTPUT, "w") as fout:
@@ -209,18 +214,71 @@ class MetaPathGenerator:
 
         print("Done!")
 
+    def path_to_pairs(self, window_size):
+        """Convert all metapaths to pairs of nodes
+
+        Args:
+            walks - all the walks to be translated
+            window_size - the sliding window size
+        Return:
+            pairs - the *shuffled* pair corpus of the dataset
+        """
+        pairs = []
+        if not self.walks:
+            sys.exit("Walks haven't been created.")
+        for walk in self.walks:
+            walk = walk.strip().split(' ')
+            for pos, token in enumerate(walk):
+                lcontext, rcontext = [], []
+                lcontext = walk[pos - window_size: pos] \
+                    if pos - window_size >= 0 \
+                    else walk[:pos]
+
+                if pos + 1 < len(walk):
+                    rcontext = walk[pos + 1: pos + window_size] \
+                        if pos + window_size < len(walk) \
+                        else walk[pos + 1:]
+
+                context_pairs = [[token, context]
+                                 for context in lcontext + rcontext]
+                pairs += context_pairs
+        np.random.shuffle(pairs)
+        self.pairs = pairs
+        return
+
+    def write_pairs(self):
+        """Write all pairs to files
+        Args:
+            pairs - the corpus
+        Return:
+        """
+        print("Writing Generated Pairs to files ...", end=" ")
+        DATA_DIR = os.getcwd() + "/corpus/"
+        OUTPUT = DATA_DIR + self._dataset + "_" + \
+                 str(self._coverage) + "_" + str(self._walk_length) + ".txt"
+        if not os.path.exists(DATA_DIR):
+            os.mkdir(DATA_DIR)
+        with open(OUTPUT, "w") as fout:
+            for pair in self.pairs:
+                print("{} {}".format(pair[0], pair[1]), file=fout)
+        return
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 3 + 1:
-        print("\t Usage:{} [name of dataset], [length], [num_walk]"
-                .format(sys.argv[0], file=sys.stderr))
+    if len(sys.argv) < 4 + 1:
+        print("\t Usage:{} "
+              "[name of dataset], [length], [num_walk], [window_size]"
+              .format(sys.argv[0], file=sys.stderr))
         sys.exit(1)
     dataset = sys.argv[1]
     length = int(sys.argv[2])
     num_walk = int(sys.argv[3])
+    window_size = int(sys.argv[4])
     
-    gw = MetaPathGenerator(length=length, num_walks=num_walk, dataset=dataset)
-    walks = gw.generate_metapaths(patterns=["AQRQA"], alpha=0)
-    gw.write_metapaths(walks)
+    gw = MetaPathGenerator(length=length, coverage=num_walk, dataset=dataset)
+    gw.generate_metapaths(patterns=["AQRQA"], alpha=0)
+    gw.path_to_pairs(window_size=window_size)
+    gw.write_pairs()
 
 
 

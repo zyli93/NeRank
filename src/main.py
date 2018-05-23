@@ -25,7 +25,7 @@ def runPDER(options):
     if options.gen_mp:
         mp_generator = MetaPathGenerator(
             length=options.length,
-            num_walks=options.coverage,
+            coverage=options.coverage,
             dataset=options.dataset)
         walks = mp_generator.generate_metapaths(
             patterns=options.meta_paths.split(" "),
@@ -54,7 +54,7 @@ def runPDER(options):
         id=options.id
     )
 
-    pder_model.train()
+    pder_model.run()
     pder_model.test()
 
 

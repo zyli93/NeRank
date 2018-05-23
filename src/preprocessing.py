@@ -32,8 +32,12 @@ except:
 part_user = set()
     # Users participated in Asking and Answering
 
+# count how many questions an users asked
+# count how many questions an answerer responded
 count_Q, count_A = {}, {}
-good_Q, good_A = [], []
+
+qa_map = {}
+test_candidates = set()
 
 def clean_html(x):
     return BeautifulSoup(x, 'lxml').get_text()
@@ -121,12 +125,17 @@ def split_post(raw_dir, data_dir):
         raw_dir - raw data directory
         data_dir - parsed data directory
     """
+    if os.path.exists(data_dir + "Posts_Q.json") \
+        and os.path.exists(data_dir + "Posts_A.json"):
+        print("\t\tPosts_Q.json, Posts_A.json already exists."
+              "Skipping the split_post.")
+        return
+
     with open(data_dir + "Posts_Q.json", "w") as fout_q, \
             open(data_dir + "Posts_A.json", "w") as fout_a:
         parser = etree.iterparse(raw_dir + 'Posts.xml',
                                  events=('end',), tag='row')
         for event, elem in parser:
-
             attr = dict(elem.attrib)
             attr['Body'] = clean_html(attr['Body'])
 
@@ -138,7 +147,7 @@ def split_post(raw_dir, data_dir):
     return
 
 
-def process_QA(parsed_dir, data_dir, threshold, prop_test, tsample_size):
+def process_QA(data_dir):
     """Process QA
 
     Extract attributes used in this project
@@ -150,11 +159,7 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test, tsample_size):
     """
     POST_Q = "Posts_Q.json"
     POST_A = "Posts_A.json"
-    OUTPUT = "QAU_Map_all.json"
-    OUTPUT_TEST = "test.txt"
-    OUTPUT_TRAIN = "QAU_Map.json"
-    OUTPUT_TEST_QA = "test_q_alist.txt"
-
+    OUTPUT = "Record_All.json"
 
     # Get logger to log exceptions
     logger = logging.getLogger(__name__)
@@ -165,27 +170,25 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test, tsample_size):
     if not os.path.exists(data_dir + POST_A):
         raise IOError("file {} does NOT exist".format(data_dir + POST_A))
 
-    qa_map = {}
-
     # Process question information
     with open(data_dir + POST_Q, 'r') as fin_q:
         for line in fin_q:
             data = json.loads(line)
             try:
-                qid, owner_id = data.get('Id', None), data.get('OwnerUserId', None)
+                qid, rid = data.get('Id', None), data.get('OwnerUserId', None)
                 acc_id = data.get('AcceptedAnswerId', None)
-                # Add to qa_map only when all three attributes are not None
-                if qid and owner_id:
+                if qid and rid and acc_id:
                     qa_map[qid] = {
                         'QuestionId': qid,
-                        'QuestionOwnerId': owner_id,
+                        'QuestionOwnerId': rid,
                         'AcceptedAnswerId': acc_id,
-                        'AnswerOwnerList': []
+                        'AcceptedAnswererId': 0,
+                        'AnswererIdList': [],
+                        'AnswererAnswerTuples': []
                     }
-                    # count how many questions an users asked
-                    count_Q[owner_id] = count_Q.get(owner_id, 0) + 1
+                    count_Q[rid] = count_Q.get(rid, 0) + 1
             except:
-                logger.error("Error at process_QA 1: "+ str(data))
+                logger.error("Error at process_QA 1: " + str(data))
                 continue
 
     # Process answer information
@@ -193,102 +196,134 @@ def process_QA(parsed_dir, data_dir, threshold, prop_test, tsample_size):
         for line in fin_a:
             data = json.loads(line)
             try:
-                aid, owner_id = data.get('Id', None), data.get('OwnerUserId', None)
+                answer_id = data.get('Id', None)
+                aid = data.get('OwnerUserId', None)
                 par_id = data.get('ParentId', None)
                 entry = qa_map.get(par_id, None)
-                if aid and owner_id and par_id and entry:
-                    entry['AnswerOwnerList'].append((aid, owner_id))
-                    # count the how many questions an answerer responded
-                    count_A[owner_id] = count_A.get(owner_id, 0) + 1
+                if answer_id and aid and par_id and entry:
+                    entry['AnswererAnswerTuples'].append((aid, answer_id))
+                    entry['AnswererIdList'].append(aid)
+                    count_A[aid] = count_A.get(aid, 0) + 1
                 else:
-                    logger.error("Answer {} belongs to unknown Question {} at Process QA"
-                                 .format(aid, par_id))
+                    logger.error(
+                        "Answer {} belongs to unknown Question {} at Process QA"
+                        .format(answer_id, par_id))
             except IndexError as e:
                 logger.error(e)
                 logger.info("Error at process_QA 2: " + str(data))
                 continue
 
-    # Sort qid list, write to file by order of qid
-    qid_list = sorted(list(qa_map.keys()),
-                      key=lambda x: qa_map[x]['QuestionId'])
-
-    total = len(qid_list)
-    sample_table = set()
-
-    #  Splitting the train and test at here!
+    # Fill in the blanks of `AcceptedAnswererId`
     for qid in qa_map.keys():
-        acc_ans_id = qa_map[qid]['AcceptedAnswerId']
-        rid = qa_map[qid]['QuestionOwnerId']
-        if not acc_ans_id:
-            continue
-        for ans_id, aid in qa_map[qid]['AnswerOwnerList']:
-            if ans_id == acc_ans_id \
-                    and count_Q[rid] >= threshold \
-                    and count_A[aid] >= threshold:
-                sample_table.add(qid)
-            break
+        acc_id = qa_map[qid]['AcceptedAnswerId']
+        for aid, answer_id in qa_map[qid]['AnswererAnswerTuples']:
+            if answer_id == acc_id:
+                qa_map[qid]['AcceptedAnswererId'] = aid
+                break
 
-    print("\t\tFirst print all QAU map")
+    print("\t\tPrinting the entire QRA set")
     with open(data_dir + OUTPUT, 'w') as fout:
-        for q in qa_map.keys():
-            fout.write(json.dumps(qa_map[q]) + "\n")
+        for value in qa_map.values():
+            fout.write(json.dumps(value))
 
-    print("\t\tLength of sample table {}".format(len(sample_table)), end=" ")
-    print("Sampling {} from it.".format(int(total * prop_test)))
-    test = np.random.choice(list(sample_table), size=int(total * prop_test),
+
+def question_stats(data_dir):
+    """Find the question statistics for `Introduction`
+
+    Args:
+        data_dir -
+    Return
+    """
+    INPUT = "Record_All.json"
+    OUTPUT = "question.stats"
+    if not os.path.exists(data_dir + INPUT):
+        raise IOError("file {} does NOT exist".format(data_dir + INPUT))
+
+    count = {}
+    for qid in qa_map.keys():
+        ans_count = len(qa_map[qid]['AnswererIdList'])
+        count[ans_count] = count.get(ans_count, 0) + 1
+
+    order = sorted(count.keys())
+
+    with open(data_dir + OUTPUT, "w") as fout:
+        for key in order:
+            print("{}\t{}".format(key, count[key]), file=fout)
+    return
+
+
+def build_test_set(data_dir, parsed_dir, threshold, test_sample_size,
+                   test_proportion):
+    """
+    Building test datase,
+    test_proportiont
+    Args:
+        parse_dir - the directory to save parsed set.
+        threshold - the selection threshold
+
+    Return:
+    """
+    TEST = "test.txt"
+    OUTPUT_TRAIN = "Record_Train.json"
+
+    ordered_count_A = sorted(
+        count_A.items(), key=lambda x:x[1], reverse=True)
+    ordered_aid = [x[0] for x in ordered_count_A]
+    ordered_aid = ordered_aid[: int(len(ordered_aid) * 0.1)]
+    question_count = len(qa_map)
+
+    for qid in qa_map.keys():
+        accaid = qa_map[qid]['AcceptedAnswererId']
+        rid = qa_map[qid]['QuestionOwnerId']
+        if not accaid:
+            print("Cannot file accid {}".format(accaid))
+            continue
+        if count_Q[rid] >= threshold and count_A[accaid] >= threshold:
+            test_candidates.add(qid)
+
+    print("\t\tSample table size {}. Using {} instances for test."
+          .format(len(test_candidates), int(question_count * test_proportion)))
+
+    test = np.random.choice(list(test_candidates),
+                            size=int(question_count * test_proportion),
                             replace=False)
 
     print("\t\tWriting the sampled test set to disk")
-    all_aid = list(count_A.keys())
-    with open(parsed_dir + OUTPUT_TEST, "w") as fout_test, \
-        open(parsed_dir + OUTPUT_TEST_QA, "w") as fout_alist:
+    with open(parsed_dir + TEST, "w") as fout:
         for qid in test:
             rid = qa_map[qid]['QuestionOwnerId']
-            accid = qa_map[qid]['AcceptedAnswerId']
-            aolist = qa_map[qid]['AnswerOwnerList']
-            a_pos_samples = [x[1] for x in aolist]
-
-            acc_uid = 0
-            for answer_id, answer_owner_id in aolist:
-                print("{} {}".format(qid, answer_owner_id), file=fout_alist)
-                if answer_id == accid:
-                    acc_uid = answer_owner_id
-                    break
-
-            if len(a_pos_samples) <= tsample_size:
-                n_neg_samples = tsample_size - len(a_pos_samples)
-                a_neg_samples = random.sample(all_aid, n_neg_samples)
-                a_samples = a_neg_samples + a_pos_samples
+            accaid = qa_map[qid]['AcceptedAnswererId']
+            aid_list = qa_map[qid]['AnswererIdList']
+            if len(aid_list) <= test_sample_size:
+                neg_sample_size = test_sample_size - len(aid_list)
+                neg_samples = random.sample(ordered_aid, neg_sample_size)
+                samples = neg_samples + aid_list
             else:
-                a_samples = random.sample(a_pos_samples, tsample_size)
-                if acc_uid not in a_samples:
-                    a_samples.pop()
-                    a_samples.append(acc_uid)
-
-            random.shuffle(a_samples)
-            a_samples = " ".join(a_samples)
-
-            print("{} {} {} {}".format(rid, qid, acc_uid, a_samples),
-                  file=fout_test)
+                samples = random.sample(aid_list, test_sample_size)
+                if accaid not in samples:
+                    samples.pop()
+                    samples.append(accaid)
+            samples = " ".join(samples)
+            print("{} {} {} {}".format(rid, qid, accaid, samples),
+                  file=fout)
 
     # if qid is a test instance or qid doesn't have an answer
+    qid_list = list(qa_map.keys())
     for qid in qid_list:
-        if qid in test or not len(qa_map[qid]['AnswerOwnerList']):
+        if qid in test or not len(qa_map[qid]['AnswererIdList']):
             del qa_map[qid]
 
     # Write QA pair to file
-    print("\t\tFinally write the train QAU to disk")
+    print("\t\tWriting the Record for training to disk")
     with open(data_dir + OUTPUT_TRAIN, 'w') as fout:
         for q in qa_map.keys():
             fout.write(json.dumps(qa_map[q]) + "\n")
+    return
 
 
 def extract_question_user(data_dir, parsed_dir):
     """Extract Question User pairs and output to file.
-
-    Extract "Q" and "R)"
-
-    Format:
+    Extract "Q" and "R". Format:
         <Qid> <Rid>
     E.g.
         101 40
@@ -298,7 +333,7 @@ def extract_question_user(data_dir, parsed_dir):
         data_dir - data directory
         parsed_dir - parsed file directory
     """
-    INPUT = "QAU_Map.json"
+    INPUT = "Record_Train.json"
     OUTPUT = "Q_R.txt"
 
     if not os.path.exists(data_dir + INPUT):
@@ -309,9 +344,9 @@ def extract_question_user(data_dir, parsed_dir):
             for line in fin:
                 data = json.loads(line)
                 qid = data['QuestionId']
-                owner_id = data['QuestionOwnerId']
-                part_user.add(int(owner_id))  # Adding participated questioners
-                print("{} {}".format(str(qid), str(owner_id)), file=fout)
+                rid = data['QuestionOwnerId']
+                part_user.add(int(rid))  # Adding participated questioners
+                print("{} {}".format(str(qid), str(rid)), file=fout)
 
 
 def extract_question_answer_user(data_dir, parsed_dir):
@@ -319,42 +354,38 @@ def extract_question_answer_user(data_dir, parsed_dir):
 
     (1) Extract "Q" - "A"
         The list of AnswerOwnerList contains <aid>-<owner_id> pairs
-
         Format:
             <Qid> <Aid>
         E.g.
             100 1011
             21 490
-    (2) Extract "Q" - Accepted answer
 
+    (2) Extract "Q" - Accepted answerer
         Format:
-            <Qid> <Acc_Ans_id>
-
+            <Qid> <Acc_Aid>
     Args:
         data_dir - data directory
         parsed_dir - parsed file directory
     """
-    INPUT = "QAU_Map.json"
-    OUTPUT = "Q_A.txt"
-    OUTPUT_ACCEPT = "Q_ACC.txt"
+    INPUT = "Record_Train.json"
+    OUTPUT_A = "Q_A.txt"
+    OUTPUT_ACC = "Q_ACC.txt"
 
     if not os.path.exists(data_dir + INPUT):
         IOError("Can NOT find {}".format(data_dir + INPUT))
 
     with open(data_dir + INPUT, "r") as fin, \
-            open(parsed_dir + OUTPUT_ACCEPT, "w") as fout_acc, \
-            open(parsed_dir + OUTPUT, "w") as fout:
+            open(parsed_dir + OUTPUT_A, "w") as fout_a, \
+            open(parsed_dir + OUTPUT_ACC, "w") as fout_acc:
         for line in fin:
             data = json.loads(line)
             qid = data['QuestionId']
-            au_list = data['AnswerOwnerList']
-            acid = data['AcceptedAnswerId']
-            for aid, ans_owner_id in au_list:
-                part_user.add(int(ans_owner_id))
-                print("{} {}".format(str(qid), str(ans_owner_id)),
-                      file=fout)
-            print("{} {}".format(str(qid), str(acid)),
-                  file=fout_acc)
+            aid_list = data['AnswererIdList']
+            accaid = data['AcceptedAnswererId']
+            for aid in aid_list:
+                part_user.add(int(aid))
+                print("{} {}".format(str(qid), str(aid)), file=fout_a)
+            print("{} {}".format(str(qid), str(accaid)), file=fout_acc)
 
 
 def extract_question_content(data_dir, parsed_dir):
@@ -505,12 +536,12 @@ def extract_question_best_answerer(data_dir, parsed_dir):
 
 
 def write_part_users(parsed_dir):
-    OUTPUT = "part_users.txt"
+    OUTPUT = "QA_ID.txt"
     with open(parsed_dir + OUTPUT, "w") as fout:
-        idlist = list(part_user)
-        idlist.sort()
-        for user_id in idlist:
-            print("{}".format(user_id), file=fout)
+        IdList = list(part_user)
+        IdList.sort()
+        for index, user_id in enumerate(IdList):
+            print("{} {}".format(index + 1, user_id), file=fout)
 
 
 def preprocess_(dataset, threshold, prop_test, sample_size):
@@ -559,9 +590,13 @@ def preprocess_(dataset, threshold, prop_test, sample_size):
     # Extract question-user, answer-user, and question-answer information
     # Generate Question and Answer/User map
     print("\tProcessing QA")
-    process_QA(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
-               threshold=threshold, prop_test=prop_test,
-               tsample_size=sample_size)
+    process_QA(data_dir=DATA_DIR)
+
+    question_stats(data_dir=DATA_DIR)
+
+    build_test_set(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
+                   threshold=threshold, test_sample_size=sample_size,
+                   test_proportion=prop_test)
 
     print("\tExtracting Q, R, A relations ...")
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
@@ -570,11 +605,13 @@ def preprocess_(dataset, threshold, prop_test, sample_size):
 
     extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+    # extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    extract_question_best_answerer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+    # extract_question_best_answerer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     write_part_users(parsed_dir=PARSED_DIR)
+
+    print("\tGenerating question statistics...")
 
     print("Done!")
 
@@ -585,6 +622,6 @@ if __name__ == "__main__":
               .format(sys.argv[0]), file=sys.stderr)
         sys.exit(0)
     threshold = int(sys.argv[2])
-    prop_test = float(sys.argv[3])
+    test_proportion = float(sys.argv[3])
     sample_size = int(sys.argv[4])
-    preprocess_(sys.argv[1], threshold, prop_test, sample_size)
+    preprocess_(sys.argv[1], threshold, test_proportion, sample_size)
