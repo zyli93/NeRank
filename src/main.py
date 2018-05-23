@@ -38,7 +38,7 @@ def runPDER(options):
         embedding_dim=options.embedding_dim,
         epoch_num=options.epoch_num,
         batch_size=options.batch_size,
-        window_size=options.window_size,
+        # window_size=options.window_size,
         neg_sample_ratio=options.neg_ratio,
         lstm_layers=options.lstm_layers,
         include_content=options.include_content,
@@ -51,7 +51,8 @@ def runPDER(options):
         # neg_test_ratio=options.neg_test_ratio,
         mp_length=options.length,
         mp_coverage=options.coverage,
-        id=options.id
+        id=options.id,
+        answer_sample_ratio=options.answer_sample_ratio
     )
 
     pder_model.run()
@@ -85,6 +86,7 @@ if __name__ == '__main__':
         -t, --test-threshold (int)
         -f, --proportion-test (float)
         -v, --cnn-channel (int)
+        -j, --answer_sample_ratio
 
     Returns:
         do everything
@@ -184,6 +186,10 @@ if __name__ == '__main__':
     parser.add_option("-q", "--test-ratio", type="float",
                       dest="test_ratio", default=0.05,
                       help="The ratio of test dataset used in the validation set")
+
+    parser.add_option("-j", "--answer-sample-ratio", type="float",
+                      dest="answer_sample_ratio", default=0.5,
+                      help="The ratio of sample answer")
 
 
     (options, args) = parser.parse_args()

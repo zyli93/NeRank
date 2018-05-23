@@ -21,26 +21,29 @@ from utils import Utils
 
 class PDER:
     def __init__(self, dataset, embedding_dim, epoch_num,
-                 batch_size, window_size, neg_sample_ratio,
+                 batch_size, neg_sample_ratio,
                  lstm_layers, include_content, lr, cnn_channel,
                  test_ratio, lambda_, prec_k,
-                 mp_length, mp_coverage, id):
+                 mp_length, mp_coverage, id, answer_sample_ratio):
 
         self.dataset = dataset
-        self.dl = DataLoader(dataset=dataset, id=id,
-                             include_content=include_content,
-                             mp_coverage=mp_coverage, mp_length=mp_length)
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
-        self.window_size = window_size
         self.epoch_num = epoch_num
         self.neg_sample_ratio = neg_sample_ratio
         self.lstm_layers = lstm_layers
         self.learning_rate = lr
-
         self.test_prop = test_ratio
         self.prec_k = prec_k
         self.id = id
+
+        self.dl = DataLoader(dataset=dataset, ID=id,
+                             include_content=include_content,
+                             coverage=mp_coverage, length=mp_length,
+                             answer_sample_ratio=answer_sample_ratio)
+
+        self.utils = Utils(dataset=dataset, ID=id,
+                           mp_coverage=mp_coverage, mp_length=mp_length)
 
         self.model_folder = os.getcwd() + "/model/"
 
@@ -51,7 +54,7 @@ class PDER:
                             lambda_=lambda_)
 
     def run(self):
-        model, dl = self.model, self.dl
+        model, dl, utils = self.model, self.dl, self.utils
 
         if torch.cuda.device_count() > 1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
@@ -62,7 +65,6 @@ class PDER:
             model.cuda()
 
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
-
         batch_count = 0
         best_MRR, best_hit_K, best_pa1 = 0, 0, 0
 
@@ -147,63 +149,56 @@ class PDER:
                     4 - Ea. 1000: check if better result, dump model, all valid set
                     5 - ea. epoch: print, record
                 """
-                if iter % 10 == 0:
-                    print("Epoch-{}, Iter-{}".format(epoch, iter), end=" ")
-                    tr = datetime.datetime.now().isoformat()[8:24]
-                    print("Size-{} ".format(nsample) + tr, end=" ")
-                    print("Loss-{:.3f}".format(loss.data[0]))
+                n_sample = upos.shape[1]
 
-                # if iter % 20 == 0:
-                #     iMRR, ihit_K, ipa1 = self.test(test_prop=self.test_prop)
-                #     print("\tSampled validate: iter-{}, MRR={:.4f}, hit_K={:.4f}, pa1={:.4f}"
-                #             .format(iter, iMRR, ihit_K, ipa1))
+                # Print training progress every 10 iterations
+                if iter % 10 == 0:
+                    tr = datetime.datetime.now().isoformat()[8:24]
+                    print("E:{}, I:{}, size:{}, {}, Loss:{:.3f}"
+                          .format(epoch, iter, n_sample, tr, loss.data[0]))
+
+                # Write to file every 10 iterations
                 if batch_count % 10 == 0:
                     hMRR, hhit_K, hpa1 = self.test()
-                    print("\tEntire validate: iter-{},  MRR={:.4f},  hit_K={:.4f},  pa1={:.4f}"
-                            .format(iter, hMRR, hhit_K, hpa1))
+                    print("\tEntire Val@ I:{}, MRR={:.4f}, hitK={:.4f}, pa1={:.4f}"
+                          .format(iter, hMRR, hhit_K, hpa1))
                     msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
-                            .format(epoch, iter, hMRR, hhit_K, hpa1)
-                    dl.write_perf_tofile(msg=msg)
+                          .format(epoch, iter, hMRR, hhit_K, hpa1)
+                    utils.write_performance(msg=msg)
 
-                if iter % 1000 == 0:
+                # Write to disk every 1000 iterations
+                if batch_count % 1000 == 0:
                     kMRR, khit_K, kpa1 = self.test()
                     if sum([kMRR > best_MRR, khit_K > best_hit_K, kpa1 > best_pa1]) > 1:
-                        print("--->better pref: MRR-{:.6f}, hitK-{:.6f}, pa1-{:.6f}".
-                                format(kMRR, khit_K, kpa1))
+                        print("\t--->Better Pref: MRR={:.6f}, hitK={:.6f}, pa1={:.6f}"
+                              .format(kMRR, khit_K, kpa1))
                         best_MRR, best_hit_K, best_pa1 = kMRR, khit_K, kpa1
-                        if not os.path.exists(self.model_folder):
-                            print("Creating Model folder")
-                            os.mkdir(self.model_folder)
-
-                        torch.save(model.state_dict(),
-                                   self.model_folder + self.dataset + "_" + \
-                                           str(self.id) + "_E{}I{}".format(epoch, iter))
-
+                        utils.save_model(model=model, epoch=epoch, iter=iter)
 
             eMRR, ehit_K, epa1 = self.test()
-            print("Vald@Epoch-{:d}, MRR-{:.6f}, hit_K-{:.6f}, pa1-{:.6f}"
+            print("Entire Val@ E:{:d}, MRR-{:.6f}, hit_K-{:.6f}, pa1-{:.6f}"
                   .format(epoch, eMRR, ehit_K, epa1))
             msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
-                    .format(epoch, iter, eMRR, ehit_K, epa1)
-            dl.write_perf_tofile(msg=msg)
+                  .format(epoch, iter, eMRR, ehit_K, epa1)
+            utils.write_performance(msg=msg)
 
 
         print("Optimization Finished!")
 
     def test(self, test_prop=None):
-        dl = self.dl
-        model = self.model
+        model, dl = self.model, self.dl
         model.eval()
-        tbatch = dl.get_test_batch(test_prop=test_prop)
         MRR, hit_K, prec_1 = 0, 0, 0
-        tbatch_len = len(tbatch)
 
-        # The format of tbatch is:  [aids], rid, qid, accid
-        for rid, qid, accid, aid_list in tbatch:
+        test_batch = dl.get_test_batch(test_prop=test_prop)
+        test_batch_len = len(test_batch)
+
+        # The format of test_batch is:  [aids], rid, qid, accid
+        for rid, qid, accaid, aid_list in test_batch:
             rank_a = Variable(torch.LongTensor(dl.uid2index(aid_list)))
             rep_rid = [rid] * len(aid_list)
             rank_r = Variable(torch.LongTensor(dl.uid2index(rep_rid)))
-            rank_q_len= dl.q2len(qid)
+            rank_q_len = dl.q2len(qid)
             rank_q = Variable(torch.FloatTensor(dl.q2emb(qid)))
 
             if torch.cuda.is_available():
@@ -213,13 +208,13 @@ class PDER:
             score = model(rpos=None, apos=None, qinfo=None,
                           rank=None, dl=dl,
                           test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
-            RR, hit, prec = Utils.performance_metrics(
-                aid_list, score, accid, self.prec_k)
+            RR, hit, prec = self.utils.performance_metrics(
+                aid_list, score, accaid, self.prec_k)
             MRR += RR
             hit_K += hit
             prec_1 += prec
 
-        MRR, hit_K, prec_1 = MRR/tbatch_len, hit_K/tbatch_len, prec_1/tbatch_len
+        MRR, hit_K, prec_1 = MRR / test_batch_len, hit_K / test_batch_len, prec_1 / test_batch_len
         return MRR, hit_K, prec_1
 
 

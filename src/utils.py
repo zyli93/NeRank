@@ -1,9 +1,11 @@
 import os, sys
+import torch
 
 class Utils:
     def __init__(self, dataset, ID, mp_length, mp_coverage):
         self.dataset = dataset
         self.id = ID
+        self.model_folder = os.getcwd() + "/model/"
 
         self.PERF_DIR = os.getcwd() + "/performance/"
         self.performance_file = self.PERF_DIR + \
@@ -34,8 +36,12 @@ class Utils:
                 else:
                     return 1/(ind+1), int(ind < k), 0
 
-    def save_model(self):
-        pass
+    def save_model(self, model, epoch, iter):
+        if not os.path.exists(self.model_folder):
+            os.mkdir(self.model_folder)
+        torch.save(model.state_dict(),
+                   "{}_{}_E{}I{}".format(self.model_folder, str(self.id), epoch, iter))
+        return
 
     def write_performance(self, msg):
         if not os.path.exists(self.PERF_DIR):

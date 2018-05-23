@@ -17,14 +17,15 @@ data_index = 0
 test_index = 0
 
 class DataLoader():
-    def __init__(self, dataset, id, 
-                 include_content, coverage, length):
+    def __init__(self, dataset, ID,
+                 include_content, coverage, length, answer_sample_ratio):
         print("Initializing data_loader ...")
         self.PAD_LEN = 24
-        self.id = id
+        self.id = ID
         self.dataset = dataset
         self.include_content = include_content
         self.process = True
+        self.answer_sample_ratio = answer_sample_ratio
 
         self.corpus_path =\
             os.getcwd() + "/corpus/" + "{}_{}_{}.txt".format(
@@ -157,7 +158,7 @@ class DataLoader():
             self.sample_table,
             size=int(len(batch_pairs) * neg_ratio))
         npos = self.__separate_entity(neg_samples)
-        aqr, accqr = self.get_acc_ind(upos, vpos)
+        aqr, accqr = self.get_answer_sample(upos, vpos)
         return upos, vpos, npos, aqr, accqr
 
     def get_test_batch(self, test_prop):
@@ -186,7 +187,7 @@ class DataLoader():
             batch = self.testset
         return batch
 
-    def get_acc_ind(self, upos, sample_rate):
+    def get_answer_sample(self, upos, sample_rate):
         """
         This method is for Ranking CNN
 
@@ -413,9 +414,9 @@ class DataLoader():
             for line in lines:
                 test_data = [int(x) for x in line.strip().split()]
                 rid, qid, accid = test_data[:3]
-                aids = test_data[3:]
+                aidlist = test_data[3:]
                 # rid, qid, accid = [int(x) for x in line.strip().split()]
-                test_set.append((rid, qid, accid, aids))
+                test_set.append((rid, qid, accid, aidlist))
         return test_set
 
     def qid2padded_vec(self, qid_list):
