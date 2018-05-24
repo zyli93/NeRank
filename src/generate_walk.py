@@ -267,7 +267,7 @@ class MetaPathGenerator:
 if __name__ == "__main__":
     if len(sys.argv) < 4 + 1:
         print("\t Usage:{} "
-              "[name of dataset], [length], [num_walk], [window_size]"
+              "[name of dataset], [length], [num_walk], [window_size], [cores]"
               .format(sys.argv[0], file=sys.stderr))
         sys.exit(1)
     dataset = sys.argv[1]

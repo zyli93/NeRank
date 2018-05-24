@@ -23,6 +23,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
 import string, random
+from collections import Counter 
 
 try:
     import ujson as json
@@ -160,9 +161,14 @@ def process_QA(data_dir):
     POST_Q = "Posts_Q.json"
     POST_A = "Posts_A.json"
     OUTPUT = "Record_All.json"
+    RAW_STATS = "question.stats.raw"
 
     # Get logger to log exceptions
     logger = logging.getLogger(__name__)
+
+    no_acc_question = 0
+
+    raw_question_stats = []
 
     if not os.path.exists(data_dir + POST_Q):
         raise IOError("file {} does NOT exist".format(data_dir + POST_Q))
@@ -176,20 +182,37 @@ def process_QA(data_dir):
             data = json.loads(line)
             try:
                 qid, rid = data.get('Id', None), data.get('OwnerUserId', None)
-                acc_id = data.get('AcceptedAnswerId', None)
-                if qid and rid and acc_id:
-                    qa_map[qid] = {
-                        'QuestionId': qid,
-                        'QuestionOwnerId': rid,
-                        'AcceptedAnswerId': acc_id,
-                        'AcceptedAnswererId': 0,
-                        'AnswererIdList': [],
-                        'AnswererAnswerTuples': []
-                    }
-                    count_Q[rid] = count_Q.get(rid, 0) + 1
+                # If such 
+                if qid and rid:
+                    acc_id = data.get('AcceptedAnswerId', None)
+                    answer_count = int(data.get('AnswerCount', -1))
+                    if acc_id:
+                        qa_map[qid] = {
+                            'QuestionId': qid,
+                            'QuestionOwnerId': rid,
+                            'AcceptedAnswerId': acc_id,
+                            'AcceptedAnswererId': None,
+                            'AnswererIdList': [],
+                            'AnswererAnswerTuples': []
+                        }
+                        count_Q[rid] = count_Q.get(rid, 0) + 1
+                    else:
+                        no_acc_question += 1
+
+                    if answer_count >= 0:
+                        raw_question_stats.append(answer_count)
             except:
                 logger.error("Error at process_QA 1: " + str(data))
                 continue
+    print("\t\t{} questions do not have accepted answer!"
+          .format(no_acc_question))
+    
+    # Count raw question statistics
+    raw_question_stats_cntr = Counter(raw_question_stats)
+    with open(data_dir + RAW_STATS, "w") as fout:
+        for x in sorted(list(raw_question_stats_cntr.keys())):
+            print("{}\t{}".format(x, raw_question_stats_cntr[x]), file=fout)
+        print("Total\t{}".format(sum(raw_question_stats)), file=fout)
 
     # Process answer information
     with open(data_dir + POST_A, 'r') as fin_a:
@@ -198,34 +221,37 @@ def process_QA(data_dir):
             try:
                 answer_id = data.get('Id', None)
                 aid = data.get('OwnerUserId', None)
-                par_id = data.get('ParentId', None)
-                entry = qa_map.get(par_id, None)
-                if answer_id and aid and par_id and entry:
+                qid = data.get('ParentId', None)
+                entry = qa_map.get(qid, None)
+                if answer_id and aid and qid and entry:
                     entry['AnswererAnswerTuples'].append((aid, answer_id))
                     entry['AnswererIdList'].append(aid)
                     count_A[aid] = count_A.get(aid, 0) + 1
+
+                    # Check if we happen to hit the accepted answer
+                    if answer_id == entry['AcceptedAnswerId']:
+                        entry['AcceptedAnswererId'] = aid
                 else:
                     logger.error(
                         "Answer {} belongs to unknown Question {} at Process QA"
-                        .format(answer_id, par_id))
+                        .format(answer_id, qid))
             except IndexError as e:
                 logger.error(e)
                 logger.info("Error at process_QA 2: " + str(data))
                 continue
 
     # Fill in the blanks of `AcceptedAnswererId`
-    for qid in qa_map.keys():
-        acc_id = qa_map[qid]['AcceptedAnswerId']
-        for aid, answer_id in qa_map[qid]['AnswererAnswerTuples']:
-            if answer_id == acc_id:
-                qa_map[qid]['AcceptedAnswererId'] = aid
-                break
+    # for qid in qa_map.keys():
+    #    acc_id = qa_map[qid]['AcceptedAnswerId']
+    #    for aid, answer_id in qa_map[qid]['AnswererAnswerTuples']:
+    #        if answer_id == acc_id:
+    #            qa_map[qid]['AcceptedAnswererId'] = aid
+    #            break
 
-    print("\t\tPrinting the entire QRA set")
+    print("\t\tWriting the Record for ALL to disk.")
     with open(data_dir + OUTPUT, 'w') as fout:
-        for value in qa_map.values():
-            fout.write(json.dumps(value))
-
+        for q in qa_map.keys():
+            fout.write(json.dumps(qa_map[q]) + "\n")
 
 def question_stats(data_dir):
     """Find the question statistics for `Introduction`
@@ -234,21 +260,17 @@ def question_stats(data_dir):
         data_dir -
     Return
     """
-    INPUT = "Record_All.json"
     OUTPUT = "question.stats"
-    if not os.path.exists(data_dir + INPUT):
-        raise IOError("file {} does NOT exist".format(data_dir + INPUT))
-
-    count = {}
+    count = []
     for qid in qa_map.keys():
         ans_count = len(qa_map[qid]['AnswererIdList'])
-        count[ans_count] = count.get(ans_count, 0) + 1
-
-    order = sorted(count.keys())
+        count.append(ans_count)
+    question_stats_cntr = Counter(count)
 
     with open(data_dir + OUTPUT, "w") as fout:
-        for key in order:
-            print("{}\t{}".format(key, count[key]), file=fout)
+        for x in sorted(list(question_stats_cntr.keys())):
+            print("{}\t{}".format(x, question_stats_cntr[x]), file=fout)
+        print("Total\t{}".format(sum(count), file=fout), file=fout)
     return
 
 
@@ -266,17 +288,20 @@ def build_test_set(data_dir, parsed_dir, threshold, test_sample_size,
     TEST = "test.txt"
     OUTPUT_TRAIN = "Record_Train.json"
 
+    accept_no_answerer = 0
+
     ordered_count_A = sorted(
         count_A.items(), key=lambda x:x[1], reverse=True)
     ordered_aid = [x[0] for x in ordered_count_A]
     ordered_aid = ordered_aid[: int(len(ordered_aid) * 0.1)]
+
     question_count = len(qa_map)
 
     for qid in qa_map.keys():
         accaid = qa_map[qid]['AcceptedAnswererId']
         rid = qa_map[qid]['QuestionOwnerId']
         if not accaid:
-            print("Cannot file accid {}".format(accaid))
+            accept_no_answerer += 1
             continue
         if count_Q[rid] >= threshold and count_A[accaid] >= threshold:
             test_candidates.add(qid)
@@ -287,6 +312,8 @@ def build_test_set(data_dir, parsed_dir, threshold, test_sample_size,
     test = np.random.choice(list(test_candidates),
                             size=int(question_count * test_proportion),
                             replace=False)
+
+    print("\t\tAccepted answer without Answerer {}".format(accept_no_answerer))
 
     print("\t\tWriting the sampled test set to disk")
     with open(parsed_dir + TEST, "w") as fout:
@@ -310,7 +337,9 @@ def build_test_set(data_dir, parsed_dir, threshold, test_sample_size,
     # if qid is a test instance or qid doesn't have an answer
     qid_list = list(qa_map.keys())
     for qid in qid_list:
-        if qid in test or not len(qa_map[qid]['AnswererIdList']):
+        if qid in test\
+            or not len(qa_map[qid]['AnswererIdList'])\
+            or not qa_map[qid]['AcceptedAnswererId']:
             del qa_map[qid]
 
     # Write QA pair to file
@@ -425,6 +454,8 @@ def extract_question_content(data_dir, parsed_dir):
             data = json.loads(line)
             try:
                 qid = data.get('Id')
+                if qid not in qa_map:
+                    continue
                 title = data.get('Title')
                 content = data.get('Body')
 
@@ -592,8 +623,10 @@ def preprocess_(dataset, threshold, prop_test, sample_size):
     print("\tProcessing QA")
     process_QA(data_dir=DATA_DIR)
 
+    print("\tGenerating question statistics...")
     question_stats(data_dir=DATA_DIR)
 
+    print("\tBuilding test sets")
     build_test_set(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
                    threshold=threshold, test_sample_size=sample_size,
                    test_proportion=prop_test)
@@ -603,15 +636,13 @@ def preprocess_(dataset, threshold, prop_test, sample_size):
 
     extract_question_answer_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
+    print("\tExtracting question content ...")
     extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     # extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
-
     # extract_question_best_answerer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     write_part_users(parsed_dir=PARSED_DIR)
-
-    print("\tGenerating question statistics...")
 
     print("Done!")
 
