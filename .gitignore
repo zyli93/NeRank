@@ -14,3 +14,9 @@ metapath/
 
 src/__pycache__/*
 old_src/*
+
+corpus/
+
+model/
+
+performance_WQE/
