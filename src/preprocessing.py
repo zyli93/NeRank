@@ -253,6 +253,7 @@ def process_QA(data_dir):
         for q in qa_map.keys():
             fout.write(json.dumps(qa_map[q]) + "\n")
 
+
 def question_stats(data_dir):
     """Find the question statistics for `Introduction`
 
