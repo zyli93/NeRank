@@ -10,8 +10,18 @@ Implementing CIKM'13 paper:
 """
 
 import os, sys
-
+import _pickle as pickle
+import math
 from collections import Counter
+import numpy as np
+
+import nltk
+nltk.data.path.append("/workspace/nltk_data")
+from nltk.corpus import stopwords
+
+from gensim.corpora import Dictionary
+from gensim.models import ldamodel
+
 try:
     import json as ujson
 except:
@@ -19,11 +29,6 @@ except:
 
 from preprocessing import clean_str2, remove_stopwords
 
-import nltk
-nltk.data.path.append("/workspace/nltk_data")
-from nltk.corpus import stopwords
-
-import _pickle as pickle
 
 # Global Variables
 DATA_DIR = os.getcwd() + "/data/"
@@ -91,76 +96,148 @@ def question_user_content(dataset):
     Args:
         dataset  -  the dataset
     """
-    infile_a = DATA_DIR + "{}/Posts_A.json".format(dataset)
+
+    def record_append(d, user_id, text):
+        if user_id not in d:
+            d[user_id] = [(user_id, text)]
+        else:
+            d[user_id].append((user_id, text))
+
+    qa_map_file = DATA_DIR + "{}/Record_All.json".format(dataset)
     infile_q = DATA_DIR + "{}/Posts_Q.json".format(dataset)
 
-    user_a_content = CUR_DIR + \
-                     "{}/user.answer.content".format(dataset)
-    user_aq_content = CUR_DIR + \
-                      "{}/user.question.answer.content".format(dataset)
+    user_ans_file = CUR_DIR + \
+                     "{}/user.ans.question".format(dataset)
+    user_ask_ans_file = CUR_DIR + \
+                      "{}/user.ask_ans.question".format(dataset)
 
     if not os.path.exists(CUR_DIR):
         os.mkdir(CUR_DIR)
 
-    if os.path.exists(user_a_content)\
-            and os.path.exists(user_aq_content):
+    if os.path.exists(user_ask_ans_file)\
+            and os.path.exists(user_ans_file):
         print("Answer content file exists. Skipping generation")
         return
 
-    content = {}
+    user_ansd = {}
+    user_ansd_askd = {}
+    question_content = {}
     sw_set = set(stopwords.words('english'))
-
-    with open(infile_a, "r") as fin:
-        lines = fin.readlines()
-        for line in lines:
-            data = json.loads(line)
-            aid = data.get('OwnerId', None)
-            if not aid:
-                continue
-            aid = int(aid)
-            body = remove_stopwords(
-                    clean_str2(data['Body']), sw_set)
-            if aid not in content:
-                content[aid] = body
-            else:
-                content[aid] += body
-
-    with open(user_a_content, "wb") as fout:
-        pickle.dump(content, fout)
 
     with open(infile_q, "r") as fin:
         lines = fin.readlines()
         for line in lines:
             data = json.loads(line)
+            qid = data.get('Id', None)
+            qcontent = data.get('Body', None)
             rid = data.get('OwnerId', None)
-            if not rid:
+            if not (qid and qcontent and rid):
                 continue
-            rid = int(rid)
-            body = remove_stopwords(
-                    clean_str2(data['Body']), sw_set)
-            if rid not in content:
-                content[rid] = body
-            else:
-                content[rid] += body
 
-    with open(user_aq_content, "w") as fout:
-        pickle.dump(content, fout)
+            qcontent = remove_stopwords(clean_str2(qcontent), sw_set)
+            record_append(user_ansd_askd, int(rid), qcontent)
+            question_content[int(qid)] = qcontent
+
+    with open(qa_map_file, "r") as fin:
+        lines = fin.readlines()
+        for line in lines:
+            data = json.loads(line)
+            aid_list = data['AnswererIdList']
+            qid = int(data['QuestionId'])
+            for aid in aid_list:
+                record_append(user_ansd_askd, int(aid), question_content[qid])
+                record_append(user_ansd, int(aid), question_content[qid])
+
+    with open(user_ans_file, "wb") as fout:
+        pickle.dump(user_ansd, fout)
+
+    with open(user_ask_ans_file, "wb") as fout:
+        pickle.dump(user_ansd_askd, fout)
 
 
-def question_user_LM(dataset):
-    user_a_content = CUR_DIR + \
-                     "{}/user.answer.content".format(dataset)
-    user_aq_content = CUR_DIR + \
-                      "{}/user.question.answer.content".format(dataset)
+def question_user_LM(dataset, mode):
+    if mode != 'ans' or mode != 'ask_ans':
+        print("Incorrect mode provided")
+        sys.exit(1)
 
-    # Loading two datasets
-    user_a, user_aq = {}, {}
-    with open(user_a_content, "rb") as fin:
-        user_a = pickle.load(fin)
+    infile = CUR_DIR + \
+                "{}/user.{}.question".format(dataset, mode)
+    outfile = CUR_DIR + \
+                "{}/qid.prob.LM.{}".format(dataset, mode)
 
-    with open(user_aq_content, "rb") as fin:
-        user_aq = pickle.load(fin)
+    user_records = {}
+    with open(infile, "rb") as fin:
+        user_records = pickle.load(fin)
+    if not user_records:
+        print("User records of {} is empty".format(mode))
+        sys.exit(1)
 
+    uid_list = user_records.keys()
+    with open(outfile, "w") as fout:
+        for uid in uid_list:
+            records = user_records[uid]
+            probs = get_prob_LM(records)
+            for qid, prob in probs:
+                print("{:d} {:.6f}".format(qid, prob), file=fout)
+
+
+def get_prob_LM(records):
+    """
+    Get the probability of each record.
+
+    Args:
+        records - (qid, text) tuples
+
+    Returns:
+        probs - probability in terms of (qid, prob)
+    """
+    all_text = " ".join([x[1] for x in records])
+    one_grams = all_text.split(" ")
+    og_count = Counter(one_grams)
+    og_total = len(one_grams)
+
+    two_grams = list(zip(one_grams, one_grams[1:]))
+    tg_count = Counter(two_grams)
+    tg_start_count = Counter([x[0] for x in two_grams])
+
+    probs = []
+
+    for qid, text in records:
+        text = text.split(" ")
+        init_token = text[0]
+        trans_tokens = list(zip(text, text[1:]))
+
+        log_prob = math.log(og_count[init_token] / og_total)
+        for trans in trans_tokens:
+            margin = tg_start_count[trans[0]]
+            joint  = tg_count[trans]
+            log_prob += math.log(joint / margin)
+        probs.append((qid, log_prob))
+
+    return probs
+
+
+def get_prob_LDA(records):
+    """
+    Args:
+        records - (qid, text)
+    """
+    qid_list = [x[0] for x in records]
+    texts = [x[1].split(" ") for x in records]
+    dictionary = Dictionary(texts)
+    corpus = [dictionary.doc2bow(text) for text in texts]
+    np.random.seed(1)
+
+    model = ldamodel.LdaModel(corpus, id2word=dictionary, num_topics=10)
+    
+    for
+    """
+    bow_water  = ['bank','water','bank']
+    bow_finance = ['bank','finance','bank']
+    
+    bow = model.id2word.doc2bow(bow_water) # convert to bag of words format first
+    doc_topics, word_topics, phi_values = model.get_document_topics(bow, per_word_topics=True)
+    """
 
 
 
