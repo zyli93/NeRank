@@ -9,13 +9,13 @@ Implementing TKDE'14 paper:
     Expert Finding for Question Answering via Graph Regularized Matrix Completion
 """
 
-import cPickle
-
 from scipy.sparse import coo_matrix, save_npz
+from collections import Counter
 
 import os, sys
 from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
+import itertools
 
 try:
     import ujson as json
@@ -26,7 +26,6 @@ except:
 DATA_DIR = os.getcwd() + "/data/"
 PARSED_DIR = DATA_DIR + "parsed/"
 CUR_DIR = os.getcwd() + "/tkde14/"
-CUR_PARSED_DIR = CUR_DIR + "parsed/"
 
 """
 Three files to generate:
@@ -91,4 +90,61 @@ def build_matrix_Y(dataset):
 
 
 def build_matrix_L(dataset):
+    """
+    Build matrix L,
+        L = D - W
+        D_ii = \sum_j W_ij
+        W_ij = Directed + Undirected
+
+    Args:
+        dataset - the dataset
+
+    Return:
+        write the sparse matrix L to file
+    """
+    infile = DATA_DIR + "{}/Record_Train.json"
+    outfile = CUR_DIR + "{}/mat.L"
+
+    # Compute W
+
+    ask_ans_links = set()  # Raiser & Answerer, modeling the friend relationship
+    user_coanswer = Counter()
+    user_answer = Counter()
+    with open(infile, "r") as fin:
+        lines = fin.readlines()
+
+        for line in lines:
+            data = json.loads(line)
+            rid = int(data['QuestionOwnerId'])
+            aidlist = [int(x) for x in data['AnswererIdList']]
+            ask_ans_links.update(
+                [(rid, aid) if rid <= aid else (aid, rid) for aid in aidlist])
+
+            user_answer.update(aidlist)  # Record # of questions a user answered
+            coanswers = list(itertools.combinations(aidlist, 2))  # Co-answered
+            user_coanswer.update(coanswers)
+
+    dict_W = dict((pair, 1) for pair in ask_ans_links)
+    max_id = np.amax(ask_ans_links)
+
+    for t in user_coanswer.keys():
+        if t in ask_ans_links:
+            continue
+        aid1, aid2 = t[0], t[1]
+        dict_W[t] = user_coanswer[t] \
+                    / (user_answer[aid1] + user_answer[aid2] - user_coanswer[t])
+
+    dim1 = [x[0][0] for x in dict_W.items()]
+    dim2 = [x[0][1] for x in dict_W.items()]
+    row = np.array(dim1 + dim2)
+    col = np.array(dim2 + dim1)
+    val = np.array([x[1] for x in dict_W.items()] * 2)
+    mat_W = coo_matrix(val, (row, col), shape=(max_id, max_id))
+    mat_D_value = mat_W.sum(axis=1)
+    mat_W = - mat_W
+    mat_W.setdia
+
+
+
+
 

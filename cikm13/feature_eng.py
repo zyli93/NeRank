@@ -107,7 +107,7 @@ def question_user_content(dataset):
     infile_q = DATA_DIR + "{}/Posts_Q.json".format(dataset)
 
     user_ans_file = CUR_DIR + \
-                     "{}/user.ans.question".format(dataset)
+                    "{}/user.ans.question".format(dataset)
     user_ask_ans_file = CUR_DIR + \
                       "{}/user.ask_ans.question".format(dataset)
 
@@ -116,12 +116,12 @@ def question_user_content(dataset):
 
     if os.path.exists(user_ask_ans_file)\
             and os.path.exists(user_ans_file):
-        print("Answer content file exists. Skipping generation")
+        print("\n\t\tAnswer content file exists. Skipping generation")
         return
 
-    user_ansd = {}
-    user_ansd_askd = {}
-    question_content = {}
+    user_ansd = {}  # User answered
+    user_ansd_askd = {}  # User answered and asked
+    question_content = {}  # The content of the question
     sw_set = set(stopwords.words('english'))
 
     with open(infile_q, "r") as fin:
@@ -155,17 +155,15 @@ def question_user_content(dataset):
         pickle.dump(user_ansd_askd, fout)
 
 
-def question_user_LM(dataset, mode):
-    if mode != 'ans' or mode != 'ask_ans':
-        print("Incorrect mode provided")
+def question_user_features(dataset, mode):
+    if mode not in ['lm.ans', 'lm.ask_ans', 'lda']:
+        print("Incorrect mode provided!")
         sys.exit(1)
 
-    infile = CUR_DIR + \
-                "{}/user.{}.question".format(dataset, mode)
-    outfile = CUR_DIR + \
-                "{}/qid.prob.LM.{}".format(dataset, mode)
+    mode_file = "ans" if mode in ['lm.ans', 'lda'] else "ask_ans"
+    infile = CUR_DIR + "{}/user.{}.question".format(dataset, mode_file)
+    outfile = CUR_DIR + "{}/qid.prob.{}".format(dataset, mode)
 
-    user_records = {}
     with open(infile, "rb") as fin:
         user_records = pickle.load(fin)
     if not user_records:
@@ -173,10 +171,11 @@ def question_user_LM(dataset, mode):
         sys.exit(1)
 
     uid_list = user_records.keys()
+    prob_func = get_prob_LDA if mode == "lda" else get_prob_LM
     with open(outfile, "w") as fout:
         for uid in uid_list:
             records = user_records[uid]
-            probs = get_prob_LM(records)
+            probs = prob_func(records)
             for qid, prob in probs:
                 print("{:d} {:.6f}".format(qid, prob), file=fout)
 
@@ -222,24 +221,73 @@ def get_prob_LDA(records):
     Args:
         records - (qid, text)
     """
-    qid_list = [x[0] for x in records]
+    num_topics = 10
+    topn_words = 1000
+
+    probs = []
+
+    qid_list = [int(x[0]) for x in records]
     texts = [x[1].split(" ") for x in records]
+
     dictionary = Dictionary(texts)
     corpus = [dictionary.doc2bow(text) for text in texts]
     np.random.seed(1)
 
-    model = ldamodel.LdaModel(corpus, id2word=dictionary, num_topics=10)
-    
-    for
-    """
-    bow_water  = ['bank','water','bank']
-    bow_finance = ['bank','finance','bank']
-    
-    bow = model.id2word.doc2bow(bow_water) # convert to bag of words format first
-    doc_topics, word_topics, phi_values = model.get_document_topics(bow, per_word_topics=True)
-    """
+    model = ldamodel.LdaModel(corpus, id2word=dictionary, num_topics=num_topics)
+
+    topic_word_probs = [
+        dict(model.get_topic_terms(topic_id, topn=topn_words))
+        for topic_id in range(num_topics)]
+
+    for index, text in enumerate(texts):
+        text_prob = 0.0
+        text_bow = model.id2word.doc2bow(text)
+        doc_topics, word_topics, phi_values = \
+            model.get_document_topics(text_bow, per_word_topics=True)
+
+        # tprob is the hash table of [topic ID: topic probability]
+        tprob = dict(doc_topics)
+
+        # wtopic is the hash table of [word ID: list of topics it is in]
+        wtopic = dict(word_topics)
+
+        for word_id, count in text_bow:
+            # count x log(
+            word_prob = sum([tprob[topic_id] *
+                              (topic_word_probs[topic_id][word_id]
+                               if word_id in topic_word_probs[topic_id] else 0)
+                              for topic_id in wtopic[word_id]])
+            text_prob += count * math.log(word_prob)
+        probs.append((qid_list[index], text_prob))
+
+    return probs
 
 
+if __name__ == "__main__":
+    if len(sys.argv) < 1 + 1:
+        print("Usage:\n\tpython {} [dataset]".format(sys.argv[0]))
+        sys.exit()
 
+    dataset = sys.argv[1]
 
+    print("Running Feature Extraction of CIKM'13 baseline ...")
+
+    print("\tProcessing question title length ...", end="")
+    question_title_len(dataset=dataset)
+    print("Done!")
+
+    print("\tProcessing user specific features ...", end="")
+    user_specific(dataset=dataset)
+    print("Done!")
+
+    print("\tProcessing questions & answers content ...", end="")
+    question_user_content(dataset=dataset)
+    print("Done!")
+
+    for mode in ["lm.ans", "lm.ask_ans", "lda"]:
+        print("\tProcessing features in {}".format(mode), end="")
+        question_user_features(dataset=dataset, mode=mode)
+        print("\tDone!")
+
+    print("! - All set - !")
 
