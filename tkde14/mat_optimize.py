@@ -25,7 +25,7 @@ except:
 # Global Variables
 DATA_DIR = os.getcwd() + "/data/"
 PARSED_DIR = DATA_DIR + "parsed/"
-CUR_DIR = os.getcwd() + "/tkde14/"
+CUR_DIR = os.getcwd() + "/tkde14/data/"
 
 """
 Three files to generate:
@@ -42,8 +42,8 @@ Three files to generate:
 
 def build_matrix_Q(dataset):
     infile = PARSED_DIR + "{}/Q_content_nsw.txt".format(dataset)
-    mat_Q_file = CUR_DIR + "mat.Q"
-    question_index_file = CUR_DIR + "question.to.index"
+    mat_Q_file = CUR_DIR + "{}/mat.Q".format(dataset)
+    question_index_file = CUR_DIR + "{}/question.to.index".format(dataset)
 
     count_vectorizer = CountVectorizer(
         analyzer='word', stop_words='english', max_df=0.9, min_df=2)
@@ -70,7 +70,7 @@ def build_matrix_Q(dataset):
 
 def build_matrix_Y(dataset):
     infile = DATA_DIR + "{}/Posts_A.json".format(dataset)
-    mat_Y_file = CUR_DIR + "mat.Y"
+    mat_Y_file = CUR_DIR + "{}/mat.Y".format(dataset)
 
     """
     Format of matrix Y:
@@ -102,8 +102,8 @@ def build_matrix_L(dataset):
     Return:
         write the sparse matrix L to file
     """
-    infile = DATA_DIR + "{}/Record_Train.json"
-    outfile = CUR_DIR + "{}/mat.L"
+    infile = DATA_DIR + "{}/Record_Train.json".format(dataset)
+    outfile = CUR_DIR + "{}/mat.L".format(dataset)
 
     # Compute W
 
@@ -125,7 +125,7 @@ def build_matrix_L(dataset):
             user_coanswer.update(coanswers)
 
     dict_W = dict((pair, 1) for pair in ask_ans_links)
-    max_id = np.amax(ask_ans_links)
+    max_id = np.amax(list(ask_ans_links)) + 1
 
     for t in user_coanswer.keys():
         if t in ask_ans_links:
@@ -139,10 +139,36 @@ def build_matrix_L(dataset):
     row = np.array(dim1 + dim2)
     col = np.array(dim2 + dim1)
     val = np.array([x[1] for x in dict_W.items()] * 2)
-    mat_W = coo_matrix(val, (row, col), shape=(max_id, max_id))
-    mat_D_value = mat_W.sum(axis=1)
+    mat_W = coo_matrix((val, (row, col)), shape=(max_id, max_id))
+    mat_D_value = mat_W.sum(axis=1).squeeze().tolist()[0]
     mat_W = - mat_W
-    mat_W.setdia
+    mat_W.setdiag(mat_D_value)
+    save_npz(outfile, mat_W)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 1 + 1:
+        print("Usage:\n\tpython {} [dataset]".format(sys.argv[0]))
+        sys.exit(1)
+
+    dataset = sys.argv[1]
+
+    RESULT_DIR = CUR_DIR + dataset
+    if not os.path.exists(RESULT_DIR):
+        os.mkdir(CUR_DIR)
+        os.mkdir(RESULT_DIR)
+
+    print("Building Matrix L...")
+    build_matrix_L(dataset)
+
+    print("Building Matrix Q...")
+    build_matrix_Q(dataset)
+
+    print("Building Matrix Y...")
+    build_matrix_Y(dataset)
+
+    print("Output files are stored in {}".format(RESULT_DIR))
+    print("Done!")
 
 
 
