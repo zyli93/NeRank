@@ -13,6 +13,8 @@ import os, sys
 import gensim
 import random
 
+from collections import Counter
+
 data_index = 0
 test_index = 0
 
@@ -78,7 +80,7 @@ class DataLoader():
         return:
             data  -  the metapath dataset
         """
-        with open(self.corpus, "r") as fin:
+        with open(self.corpus_path, "r") as fin:
             lines = fin.readlines()
             data = [line.strip().split(" ") for line in lines]
             return data
@@ -93,7 +95,7 @@ class DataLoader():
             count  - the sorted list of
         """
         count_dict = {}
-        with open(self.mp_walks, "r") as fin:
+        with open(self.mpwalks_path, "r") as fin:
             line = fin.readline()
             path = line.strip().split(" ")
             for entity in path:
