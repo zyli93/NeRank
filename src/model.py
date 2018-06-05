@@ -1,6 +1,4 @@
 """
-            irint("check point 1, epoch", epoch)
-
     Model file
 
     author: Zeyu Li <zeyuli@ucla.ed> or <zyli@cs.ucla.edu>
@@ -46,14 +44,16 @@ class NeRank(nn.Module):
         self.out_channel = cnn_channel
         self.convnet1 = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(1, self.out_channel, kernel_size=(1, embedding_dim))),
-            ('relu1', nn.ReLU()),
-            ('pool1', nn.MaxPool2d(kernel_size=(3, 1)))
+            ('relu1', nn.ReLU())
+            # No max pooling, therefore no dimension reduction
+            # ('pool1', nn.MaxPool2d(kernel_size=(3, 1)))
         ]))
 
         self.convnet2 = nn.Sequential(OrderedDict([
             ('conv2', nn.Conv2d(1, self.out_channel, kernel_size=(2, embedding_dim))),
-            ('relu2', nn.ReLU()),
-            ('pool2', nn.MaxPool2d(kernel_size=(2, 1)))
+            ('relu2', nn.ReLU())
+            # No max pooling, therefore no dimension reduction
+            # ('pool2', nn.MaxPool2d(kernel_size=(2, 1)))
         ]))
 
         self.convnet3 = nn.Sequential(OrderedDict([
@@ -64,6 +64,11 @@ class NeRank(nn.Module):
         self.fc1 = nn.Linear(self.out_channel, 1)
         self.fc2 = nn.Linear(self.out_channel, 1)
         self.fc3 = nn.Linear(self.out_channel, 1)
+
+        # batch x 32 x 6 => batch x 32 x 1 (batch x 32)
+        self.fc_new_1 = nn.Linear(6, 1)
+        # batch x 32 x 1 => batch x 1 x 1 (batch x 1)
+        self.fc_new_2 = nn.Linear(self.out_channel, 1)
 
     def init_emb(self):
         """Initialize R and A embeddings"""
@@ -200,13 +205,31 @@ class NeRank(nn.Module):
                 .unsqueeze(1)
             # high_rank_mat = high_rank_mat.unsqueeze(1)
 
-            low_score = self.fc1(self.convnet1(low_rank_mat).view(-1, self.out_channel)) \
-                      + self.fc2(self.convnet2(low_rank_mat).view(-1, self.out_channel)) \
-                      + self.fc3(self.convnet3(low_rank_mat).view(-1, self.out_channel))
+            low_score = torch.stack([
+                self.convnet1(low_rank_mat).squeeze()
+                , self.convnet2(low_rank_mat).squeeze()
+                , self.convnet3(low_rank_mat).squeeze()]
+                , dim=2)
+            high_score = torch.stack([
+                self.convnet1(high_rank_mat).squeeze()
+                , self.convnet2(high_rank_mat).squeeze()
+                , self.convnet3(high_rank_mat).squeeze()]
+                , dim=2)
 
-            high_score = self.fc1(self.convnet1(high_rank_mat).view(-1, self.out_channel)) \
-                       + self.fc2(self.convnet2(high_rank_mat).view(-1, self.out_channel)) \
-                       + self.fc3(self.convnet3(high_rank_mat).view(-1, self.out_channel))
+            low_score = self.fc_new_2(
+                self.fc_new_1(low_score.squeeze())).squeeze()
+            high_score = self.fc_new_2(
+                 self.fc_new_1(high_score.squeeze())).squeeze()
+
+
+
+            # low_score = self.fc1(self.convnet1(low_rank_mat).view(-1, self.out_channel)) \
+            #           + self.fc2(self.convnet2(low_rank_mat).view(-1, self.out_channel)) \
+            #           + self.fc3(self.convnet3(low_rank_mat).view(-1, self.out_channel))
+            #
+            # high_score = self.fc1(self.convnet1(high_rank_mat).view(-1, self.out_channel)) \
+            #            + self.fc2(self.convnet2(high_rank_mat).view(-1, self.out_channel)) \
+            #            + self.fc3(self.convnet3(high_rank_mat).view(-1, self.out_channel))
 
             rank_loss = torch.sum(low_score - high_score)
             print("Rank loss: {:.6f}".format(rank_loss.data[0]))
@@ -234,9 +257,18 @@ class NeRank(nn.Module):
                     [emb_rank_r, emb_rank_q, emb_rank_a], dim=1)\
                 .unsqueeze(1)
             # emb_rank_mat = emb_rank_mat.unsqueeze(1)
-            score = self.fc1(self.convnet1(emb_rank_mat).view(-1, self.out_channel)) \
-                    + self.fc2(self.convnet2(emb_rank_mat).view(-1, self.out_channel)) \
-                    + self.fc3(self.convnet3(emb_rank_mat).view(-1, self.out_channel))
+            # score = self.fc1(self.convnet1(emb_rank_mat).view(-1, self.out_channel)) \
+            #         + self.fc2(self.convnet2(emb_rank_mat).view(-1, self.out_channel)) \
+            #         + self.fc3(self.convnet3(emb_rank_mat).view(-1, self.out_channel))
+
+            score = torch.stack([
+                self.convnet1(emb_rank_mat).squeeze()
+                , self.convnet2(emb_rank_mat).squeeze()
+                , self.convnet3(emb_rank_mat).squeeze()]
+                , dim=2)
+
+            score = self.fc_new_2(
+                self.fc_new_1(score.squeeze())).squeeze()
 
             ret_score = score.data.squeeze().tolist()
             return ret_score

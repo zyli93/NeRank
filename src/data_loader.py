@@ -22,7 +22,7 @@ class DataLoader():
     def __init__(self, dataset, ID,
                  include_content, coverage, length, answer_sample_ratio):
         print("Initializing data_loader ...")
-        self.PAD_LEN = 24
+        self.PAD_LEN = 256
         self.id = ID
         self.dataset = dataset
         self.include_content = include_content
@@ -321,7 +321,10 @@ class DataLoader():
                 lines = fin_c.readlines()
                 for line in lines:
                     id, content = line.split(" ", 1)
-                    qid2sen[int(id)] += " " + content.strip()
+                    if int(id) in qid2sen:
+                        qid2sen[int(id)] += " " + content.strip()
+                    else:
+                        qid2sen[int(id)] = content.strip()
 
         return qid2sen
 
