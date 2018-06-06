@@ -14,7 +14,9 @@ from torch.autograd import Variable
 import torch.optim as optim
 import torch.nn as nn
 
-from model import NeRank
+from embed import Embed
+from skipgram import SkipGram
+from recsys import RecSys
 from data_loader import DataLoader
 from utils import Utils
 
@@ -37,39 +39,59 @@ class PDER:
         self.prec_k = prec_k
         self.id = id
 
-        self.dl = DataLoader(dataset=dataset, ID=id,
-                             include_content=include_content,
-                             coverage=mp_coverage, length=mp_length,
-                             answer_sample_ratio=answer_sample_ratio)
+        self.dl = DataLoader(dataset=dataset
+                             , ID=id
+                             , include_content=include_content
+                             , coverage=mp_coverage
+                             , length=mp_length
+                             , answer_sample_ratio=answer_sample_ratio
+                             )
 
-        self.utils = Utils(dataset=dataset, ID=id,
-                           mp_coverage=mp_coverage, mp_length=mp_length)
+        self.utils = Utils(dataset=dataset
+                           , ID=id
+                           , mp_coverage=mp_coverage
+                           , mp_length=mp_length
+                           )
 
         self.model_folder = os.getcwd() + "/model/"
 
-        self.model = NeRank(embedding_dim=self.embedding_dim,
-                            vocab_size=self.dl.user_count + 1,
-                            lstm_layers=self.lstm_layers,
-                            cnn_channel=cnn_channel,
-                            lambda_=lambda_)
+        self.embedding_manager = Embed(vocab_size=self.dl.user_count + 1
+                                       , embedding_dim=embedding_dim
+                                       , lstm_layers=lstm_layers
+                                       )
+
+        self.skipgram = SkipGram(embedding_dim=self.embedding_dim
+                                 , emb_man=self.embedding_manager
+                                 )
+
+        self.recsys = RecSys(embedding_dim=embedding_dim
+                             , cnn_channel=cnn_channel
+                             , embeddings=self.embedding_manager
+                             )
 
     def run(self):
-        model, dl, utils = self.model, self.dl, self.utils
+        dl, utils = self.dl, self.utils
+        recsys, skipgram = self.recsys, self.skipgram
 
         if torch.cuda.device_count() > 1:
             print("Using {} GPUs".format(torch.cuda.device_count()))
-            model = nn.DataParallel(model)
+            skipgram = nn.DataParallel(skipgram)
+            recsys = nn.DataParallel(recsys)
 
         if torch.cuda.is_available():  # Check availability of cuda
             print("Using device {}".format(torch.cuda.current_device()))
-            model.cuda()
+            skipgram.cuda()
+            recsys.cuda()
 
-        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+        skipgram_optimizer = optim.Adam(skipgram.parameters()
+                                        , lr=self.learning_rate)
+        recsys_optimizer = optim.Adam(recsys.parameters()
+                                      , lr=self.learning_rate)
+
         batch_count = 0
         best_MRR, best_hit_K, best_pa1 = 0, 0, 0
 
         for epoch in range(self.epoch_num):
-            epoch_total_loss = 0
             dl.process = True
             iter = 0
 
@@ -109,12 +131,10 @@ class PDER:
                 qinfo = [qu_wc, qv_wc, qn_wc, qulen, qvlen, qnlen]
 
                 # aqr: R, A, Q
-
                 rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
                 rank_a = Variable(torch.LongTensor(dl.uid2index(aqr[:, 1])))
-                # print(rank_a)
                 rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))
-                rank_q_wc= dl.qid2padded_vec(aqr[:, 2])
+                rank_q_wc = dl.qid2padded_vec(aqr[:, 2])
                 rank_q_len = dl.qid2vec_length(aqr[:, 2])
                 rank_q = Variable(torch.FloatTensor(rank_q_wc).view(-1, dl.PAD_LEN, 300))
                 rank_q_len = Variable(torch.LongTensor(rank_q_len))
@@ -127,17 +147,26 @@ class PDER:
                     qinfo = [x.cuda() for x in qinfo]
                     rank = [x.cuda() for x in rank]
 
-                optimizer.zero_grad()
+                """
+                ============== Skip-gram ===============
+                """
+                skipgram_optimizer.zero_grad()
+                skipgram.train()
+                skipgram_loss = skipgram(rpos=rpos
+                                         , apos=apos
+                                         , qinfo=qinfo)
+                skipgram_loss.backward()
+                skipgram_optimizer.step()
 
-                # loss and rank_loss, the later for evaluation
-                model.train()
-                loss = model(rpos=rpos, apos=apos, qinfo=qinfo,
-                             rank=rank, dl=dl,
-                             test_data=None)
-                loss.backward()
-                optimizer.step()
+                """
+                ============== Rec-Sys ===============
+                """
+                recsys_optimizer.zero_grad()
+                recsys.train()
+                recsys_loss = recsys(rank=rank)
+                recsys_loss.backward()
+                recsys_optimizer.step()
 
-                epoch_total_loss += loss.data[0]  # type(loss) = Variable
                 iter += 1
                 batch_count += 1
 
@@ -156,7 +185,7 @@ class PDER:
                 if iter % 10 == 0:
                     tr = datetime.datetime.now().isoformat()[8:24]
                     print("E:{}, I:{}, size:{}, {}, Loss:{:.3f}"
-                          .format(epoch, iter, n_sample, tr, loss.data[0]))
+                          .format(epoch, iter, n_sample, tr, skipgram_loss.data[0]))
 
                 # Write to file every 10 iterations
                 if batch_count % 10 == 0:
@@ -174,7 +203,7 @@ class PDER:
                         print("\t--->Better Pref: MRR={:.6f}, hitK={:.6f}, pa1={:.6f}"
                               .format(kMRR, khit_K, kpa1))
                         best_MRR, best_hit_K, best_pa1 = kMRR, khit_K, kpa1
-                        utils.save_model(model=model, epoch=epoch, iter=iter)
+                        utils.save_model(model=skipgram, epoch=epoch, iter=iter)
 
             eMRR, ehit_K, epa1 = self.test()
             print("Entire Val@ E:{:d}, MRR-{:.6f}, hit_K-{:.6f}, pa1-{:.6f}"
@@ -183,11 +212,10 @@ class PDER:
                   .format(epoch, iter, eMRR, ehit_K, epa1)
             utils.write_performance(msg=msg)
 
-
         print("Optimization Finished!")
 
     def test(self, test_prop=None):
-        model, dl = self.model, self.dl
+        model, dl = self.recsys, self.dl
         model.eval()
         MRR, hit_K, prec_1 = 0, 0, 0
 
@@ -206,11 +234,13 @@ class PDER:
                 rank_a = rank_a.cuda()
                 rank_r = rank_r.cuda()
                 rank_q = rank_q.cuda()
-            score = model(rpos=None, apos=None, qinfo=None,
-                          rank=None, dl=dl,
-                          test_data=[rank_a, rank_r, rank_q, rank_q_len], train=False)
-            RR, hit, prec = self.utils.performance_metrics(
-                aid_list, score, accaid, self.prec_k)
+
+            model.eval()
+            score = model.test(test_data=[rank_a, rank_r, rank_q, rank_q_len])
+            RR, hit, prec = self.utils.performance_metrics(aid_list
+                                                           , score
+                                                           , accaid
+                                                           , self.prec_k)
             MRR += RR
             hit_K += hit
             prec_1 += prec
@@ -220,5 +250,5 @@ class PDER:
 
 
 if __name__ == "__main__":
-    pder = PDER() # TODO: implement here
+    pder = PDER()
     pder.run()

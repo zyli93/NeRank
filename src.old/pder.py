@@ -48,10 +48,10 @@ class PDER:
         self.model_folder = os.getcwd() + "/model/"
 
         self.model = NeRank(embedding_dim=self.embedding_dim,
-                            vocab_size=self.dl.user_count + 1,
-                            lstm_layers=self.lstm_layers,
-                            cnn_channel=cnn_channel,
-                            lambda_=lambda_)
+                              vocab_size=self.dl.user_count + 1,
+                              lstm_layers=self.lstm_layers,
+                              cnn_channel=cnn_channel,
+                              lambda_=lambda_)
 
     def run(self):
         model, dl, utils = self.model, self.dl, self.utils
