@@ -55,6 +55,7 @@ class PDER:
 
         self.model_folder = os.getcwd() + "/model/"
 
+        print(self.dl.user_count)
         self.embedding_manager = Embed(vocab_size=self.dl.user_count + 1
                                        , embedding_dim=embedding_dim
                                        , lstm_layers=lstm_layers
@@ -131,6 +132,7 @@ class PDER:
                 qinfo = [qu_wc, qv_wc, qn_wc, qulen, qvlen, qnlen]
 
                 # aqr: R, A, Q
+                print(aqr.shape)
                 rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
                 rank_a = Variable(torch.LongTensor(dl.uid2index(aqr[:, 1])))
                 rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))

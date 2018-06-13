@@ -19,8 +19,9 @@ class Embed(nn.Module):
                  , vocab_size
                  , embedding_dim
                  , lstm_layers):
-
         super(Embed, self).__init__()
+        self.emb_dim = embedding_dim
+        print("vocab_size", vocab_size)
         self.lstm_layers = lstm_layers
         self.ru_embeddings = nn.Embedding(vocab_size, embedding_dim, sparse=False)
         self.rv_embeddings = nn.Embedding(vocab_size, embedding_dim, sparse=False)

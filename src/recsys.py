@@ -56,7 +56,11 @@ class RecSys(nn.Module):
          === Ranking ===
         """
         emb = self.embedding_manager
-        emb.zero_oout()
+        #emb.zero_out()
+        #print("emb.ru_embeddings shaoe")
+        #print(emb.ru_embeddings.weight.size())
+        #print("rank")
+        #print(rank)
         emb_rank_r = emb.ru_embeddings(rank[0])
         emb_rank_a = emb.au_embeddings(rank[1])
         emb_rank_acc = emb.au_embeddings(rank[2])
@@ -119,6 +123,8 @@ class RecSys(nn.Module):
         emb = self.embedding_manager
         test_a, test_r, test_q, test_q_len = test_data
         a_size = test_a.size(0)
+        print(test_a)
+        print(test_r)
 
         emb_rank_a = emb.au_embeddings(test_a)
         emb_rank_r = emb.ru_embeddings(test_r)

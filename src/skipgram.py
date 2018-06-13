@@ -19,16 +19,20 @@ class SkipGram(nn.Module):
     def __init__(self
                  , embedding_dim
                  , emb_man
-                 , lambda_):
+                 ):
         super(SkipGram, self).__init__()
         self.emb_dim = embedding_dim
-        self.lambda_=lambda_
+        # self.lambda_=lambda_
         self.embedding_manager = emb_man
 
     def forward(self, rpos, apos, qinfo):
         emb = self.embedding_manager
         emb.zero_out()
         # R: 0, A: 1, Q: 2
+        #print("rpos")
+        #print(rpos)
+        #print("apos")
+        #print(apos)
         embed_ru = emb.ru_embeddings(rpos[0])
         embed_au = emb.au_embeddings(apos[0])
 
