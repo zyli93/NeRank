@@ -14,6 +14,11 @@ import os, sys
 import networkx as nx
 import random
 import numpy as np
+import math
+
+from collections import Counter
+import itertools
+
 
 
 class MetaPathGenerator:
@@ -263,6 +268,17 @@ class MetaPathGenerator:
                 print("{} {}".format(pair[0], pair[1]), file=fout)
         return
 
+    def down_sample(self):
+        pairs = self.pairs
+        pairs = [(pair[0], pair[1])
+                 for pair in pairs
+                 if pair[0] != pair[1]]
+        cnt = Counter(pairs)
+        down_cnt = [[pair] * math.ceil(math.log(count))
+                    for pair, count in cnt.items()]
+        self.pairs = itertools.chain(*down_cnt)
+
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 4 + 1:
@@ -278,6 +294,7 @@ if __name__ == "__main__":
     gw = MetaPathGenerator(length=length, coverage=num_walk, dataset=dataset)
     gw.generate_metapaths(patterns=["AQRQA"], alpha=0)
     gw.path_to_pairs(window_size=window_size)
+    gw.down_sample()
     gw.write_metapaths()
     gw.write_pairs()
 
