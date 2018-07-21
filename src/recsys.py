@@ -123,8 +123,8 @@ class RecSys(nn.Module):
         emb = self.embedding_manager
         test_a, test_r, test_q, test_q_len = test_data
         a_size = test_a.size(0)
-        print(test_a)
-        print(test_r)
+        # print(test_a)
+        # print(test_r)
 
         emb_rank_a = emb.au_embeddings(test_a)
         emb_rank_r = emb.ru_embeddings(test_r)

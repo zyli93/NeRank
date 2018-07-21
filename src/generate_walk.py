@@ -257,7 +257,7 @@ class MetaPathGenerator:
             pairs - the corpus
         Return:
         """
-        print("Writing Generated Pairs to files ...", end=" ")
+        print("Writing Generated Pairs to files ...")
         DATA_DIR = os.getcwd() + "/corpus/"
         OUTPUT = DATA_DIR + self._dataset + "_" + \
                  str(self._coverage) + "_" + str(self._walk_length) + ".txt"
@@ -269,6 +269,12 @@ class MetaPathGenerator:
         return
 
     def down_sample(self):
+        """Down sampling the training sets
+        
+        1. Remove all the duplicate tuples such as "A_11 A_11"
+        2. Take log of all tuples as a down sampling
+        """
+
         pairs = self.pairs
         pairs = [(pair[0], pair[1])
                  for pair in pairs
@@ -276,7 +282,8 @@ class MetaPathGenerator:
         cnt = Counter(pairs)
         down_cnt = [[pair] * math.ceil(math.log(count))
                     for pair, count in cnt.items()]
-        self.pairs = itertools.chain(*down_cnt)
+        self.pairs = list(itertools.chain(*down_cnt))
+        np.random.shuffle(self.pairs)
 
 
 

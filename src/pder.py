@@ -87,7 +87,7 @@ class PDER:
         skipgram_optimizer = optim.Adam(skipgram.parameters()
                                         , lr=self.learning_rate)
         recsys_optimizer = optim.Adam(recsys.parameters()
-                                      , lr=self.learning_rate)
+                                      , lr=0.1 * self.learning_rate)
 
         batch_count = 0
         best_MRR, best_hit_K, best_pa1 = 0, 0, 0
@@ -132,7 +132,7 @@ class PDER:
                 qinfo = [qu_wc, qv_wc, qn_wc, qulen, qvlen, qnlen]
 
                 # aqr: R, A, Q
-                print(aqr.shape)
+                # print(aqr.shape)
                 rank_r = Variable(torch.LongTensor(dl.uid2index(aqr[:, 0])))
                 rank_a = Variable(torch.LongTensor(dl.uid2index(aqr[:, 1])))
                 rank_acc = Variable(torch.LongTensor(dl.uid2index(accqr)))
@@ -191,7 +191,8 @@ class PDER:
 
                 # Write to file every 10 iterations
                 if batch_count % 10 == 0:
-                    hMRR, hhit_K, hpa1 = self.test()
+                    hMRR, hhit_K, hpa1 = 0, 0, 0
+                    # hMRR, hhit_K, hpa1 = self.test()
                     print("\tEntire Val@ I:{}, MRR={:.4f}, hitK={:.4f}, pa1={:.4f}"
                           .format(iter, hMRR, hhit_K, hpa1))
                     msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
