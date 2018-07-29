@@ -79,8 +79,8 @@ class SkipGram(nn.Module):
         score = torch.sum(score, dim=1)
 
         log_sigmoid_pos = F.logsigmoid(score).squeeze()
-        print("NE loss: positive sample loss {:.6f}"
-              .format(log_sigmoid_pos.data[0]))
+        # print("NE loss: positive sample loss {:.6f}"
+        #       .format(log_sigmoid_pos.data[0]))
 
         neg_embed_v = neg_embed_av + neg_embed_rv + neg_embed_qv.squeeze()
         neg_embed_v = neg_embed_v.view(quinput.size(0), -1, self.emb_dim)
@@ -111,8 +111,8 @@ class SkipGram(nn.Module):
         # print(neg_score.shape)
         neg_score = torch.sum(neg_score, dim=1)
         log_sigmoid_neg = F.logsigmoid(-1 * neg_score).squeeze()
-        print("NE loss: negative sample loss {:.6f}"
-              .format(log_sigmoid_neg.data[0]))
+        # print("NE loss: negative sample loss {:.6f}"
+        #       .format(log_sigmoid_neg.data[0]))
 
         ne_loss = -1 * (log_sigmoid_pos + log_sigmoid_neg).sum()
         print("NE loss: {:.6f}".format(ne_loss.data[0]))

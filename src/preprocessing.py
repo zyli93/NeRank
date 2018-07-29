@@ -266,6 +266,8 @@ def question_stats(data_dir):
     for qid in qa_map.keys():
         ans_count = len(qa_map[qid]['AnswererIdList'])
         count.append(ans_count)
+        if ans_count == 0:
+            print("0 answer id list", qid)
     question_stats_cntr = Counter(count)
 
     with open(data_dir + OUTPUT, "w") as fout:

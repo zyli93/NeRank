@@ -87,7 +87,7 @@ class PDER:
         skipgram_optimizer = optim.Adam(skipgram.parameters()
                                         , lr=self.learning_rate)
         recsys_optimizer = optim.Adam(recsys.parameters()
-                                      , lr=0.1 * self.learning_rate)
+                                      , lr=0.07 * self.learning_rate)
 
         batch_count = 0
         best_MRR, best_hit_K, best_pa1 = 0, 0, 0
@@ -191,8 +191,8 @@ class PDER:
 
                 # Write to file every 10 iterations
                 if batch_count % 10 == 0:
-                    hMRR, hhit_K, hpa1 = 0, 0, 0
-                    # hMRR, hhit_K, hpa1 = self.test()
+                    # hMRR, hhit_K, hpa1 = 0, 0, 0
+                    hMRR, hhit_K, hpa1 = self.test()
                     print("\tEntire Val@ I:{}, MRR={:.4f}, hitK={:.4f}, pa1={:.4f}"
                           .format(iter, hMRR, hhit_K, hpa1))
                     msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
@@ -200,7 +200,7 @@ class PDER:
                     utils.write_performance(msg=msg)
 
                 # Write to disk every 1000 iterations
-                if batch_count % 1000 == 0:
+                if batch_count % 500 == 0:
                     kMRR, khit_K, kpa1 = self.test()
                     if sum([kMRR > best_MRR, khit_K > best_hit_K, kpa1 > best_pa1]) > 1:
                         print("\t--->Better Pref: MRR={:.6f}, hitK={:.6f}, pa1={:.6f}"
