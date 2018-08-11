@@ -41,7 +41,7 @@ Three files to generate:
 
 
 def build_matrix_Q(dataset):
-    infile = PARSED_DIR + "{}/Q_content_nsw.txt".format(dataset)
+    infile = PARSED_DIR + "{}/Q_title_nsw.txt".format(dataset)
     mat_Q_file = CUR_DIR + "{}/mat.Q".format(dataset)
     question_index_file = CUR_DIR + "{}/question.to.index".format(dataset)
 

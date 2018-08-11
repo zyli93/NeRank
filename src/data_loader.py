@@ -12,6 +12,7 @@ import os, sys
 
 import gensim
 import random
+import copy
 
 from collections import Counter
 
@@ -224,17 +225,37 @@ class DataLoader():
         # R: 0, A: 1, Q: 2
         datalist = []
         acclist = []
+        
+        HC_times = 3
 
         for i in range(length):
             if upos[2][i]:
                 qid = upos[2][i]
-                aid_samples = self.q2a[qid]
+                # aid_samples = self.q2a[qid]
+                # aid_samples = copy.deepcopy(self.q2a[qid])
+                aids = []
+                aids += self.q2a[qid]
                 accaid = self.q2acc[qid]
+                rid = self.q2r[qid]
+
+                # Following is the negtive samples
+                neg_ans = np.random.choice(
+                        self.all_aid, replace=False,
+                        size=len(aids) * HC_times).tolist()
+                
+                # Hard coding the times of neg samples
+                for x in neg_ans:
+                    datalist.append([rid, x, qid])
+                # datalist += list(neg_ans)
+                acclist += HC_times * aids
+                
+                aid_samples = aids
                 if len(aid_samples) < sample_size:
                     more_ans = np.random.choice(
                             self.all_aid, replace=False,
                             size=sample_size - len(aid_samples))
-                    aid_samples += list(more_ans)
+                    aid_samples += list(more_ans) 
+
                     
                 #aid_samples = np.random.choice(
                 #     aidlist, replace=True,
@@ -243,7 +264,6 @@ class DataLoader():
                 #aid_samples.pop(accaid)
                 #print(aid_samples)
 
-                rid = self.q2r[qid]
                 for x in aid_samples:
                     datalist.append([rid, x, qid])
                     acclist.append(accaid)

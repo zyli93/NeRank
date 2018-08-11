@@ -12,9 +12,9 @@ else
 fi
 
 CUDA_VISIBLE_DEVICES=$1 $PY src/main.py --dataset $2 \
-        --window-size 4 --neg-ratio 3 --embedding-dim 128 \
+        --window-size 4 --neg-ratio 3 --embedding-dim 256 \
         --lstm-layers 1 --epoch-number 100 --batch-size 200 \
-        --learning-rate 0.001 --cnn-channel 64 --lambda 100000 \
+        --learning-rate 0.003 --cnn-channel 64 --lambda 100000 \
         --length $5 --coverage $4 \
         --precision_at_K 5 --id $3 --test-ratio 0.4 \
         #--include-content

@@ -115,7 +115,7 @@ class SkipGram(nn.Module):
         #       .format(log_sigmoid_neg.data[0]))
 
         ne_loss = -1 * (log_sigmoid_pos + log_sigmoid_neg).sum()
-        print("NE loss: {:.6f}".format(ne_loss.data[0]))
+        print("NE loss: {:.6f} ".format(ne_loss.data[0]), end=" ")
 
         # loss = F.sigmoid(ne_loss) + self.lambda_ * F.sigmoid(rank_loss)
         # loss = ne_loss + self.lambda_ * rank_loss

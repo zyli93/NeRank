@@ -112,7 +112,7 @@ class RecSys(nn.Module):
         #            + self.fc2(self.convnet2(high_rank_mat).view(-1, self.out_channel)) \
         #            + self.fc3(self.convnet3(high_rank_mat).view(-1, self.out_channel))
 
-        rank_loss = torch.sum(low_score - high_score)
+        rank_loss = torch.sum(F.sigmoid(low_score - high_score))
         # rank_loss = F.sigmoid(rank_loss)
         print("Rank loss: {:.6f}".format(rank_loss.data[0]))
 
