@@ -144,6 +144,66 @@ class MetaPathGenerator:
         self.walks = walks
         return
 
+    def generate_metapaths_2(self):
+        """ Generate Random Walk
+
+        Generating random walk from the Tripartite graph
+        Args:
+            meta_pattern - the pattern that guides the walk generation
+            alpha - probability of restart
+
+        Return:
+            walks - a set of generated random walks
+        """
+        G = self.G
+        num_walks, walk_len = self._coverage, self._walk_length
+        rand = random.Random(0)
+
+        print("Generating Meta-paths ...")
+
+        if not G.number_of_edges() or not G.number_of_nodes():
+            sys.exit("Graph should be initialized before generate_walks()!")
+
+        walks = []
+
+        print("\tNow generating meta-paths from deepwalk ...")
+        start_node_list = self.get_nodelist()
+        for cnt in range(num_walks):  # Iterate the node set for cnt times
+            print("Count={}".format(cnt))
+            rand.shuffle(start_node_list)
+            total = len(start_node_list)
+            for ind, start_node in enumerate(start_node_list):
+                if ind % 3000 == 0:
+                    print("Finished {:.2f}".format(ind/total))
+                walks.append(
+                    self.__random_walk(start=start_node))
+
+        print("Done!")
+        self.walks = walks
+        return
+
+    def __random_walk(self, start=None):
+        """Single Random Walk Generator
+
+        Args:
+            rand - an random object to generate random numbers
+            start - starting node
+
+        Return:
+            walk - the single walk generated
+        """
+        rand = random.Random()
+        walk = [start]
+        cur_node = start
+        while len(walk) <= self._walk_length:
+            possible_next_nodes = [neighbor
+                                   for neighbor in G.neighbors(cur_node)]
+            next_node = rand.choice(possible_next_nodes)
+            walk.append(next_node)
+            cur_node = next_node
+
+        return " ".join(walk)
+
     def __meta_path_walk(self, start=None, alpha=0.0, pattern=None):
         """Single Walk Generator
 
@@ -162,7 +222,6 @@ class MetaPathGenerator:
         """
         def type_of(node_id):
             return node_id[0]
-
 
         rand = random.Random()
         # Checking pattern is correctly initialized
@@ -299,7 +358,10 @@ if __name__ == "__main__":
     window_size = int(sys.argv[4])
     
     gw = MetaPathGenerator(length=length, coverage=num_walk, dataset=dataset)
-    gw.generate_metapaths(patterns=["AQRQA"], alpha=0)
+
+    # Uncomment the first line for metapath-based
+    # gw.generate_metapaths(patterns=["AQRQA"], alpha=0)
+    gw.generate_metapaths_2()
     gw.path_to_pairs(window_size=window_size)
     gw.down_sample()
     gw.write_metapaths()
