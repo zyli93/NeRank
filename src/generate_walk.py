@@ -192,6 +192,7 @@ class MetaPathGenerator:
         Return:
             walk - the single walk generated
         """
+        G = self.G
         rand = random.Random()
         walk = [start]
         cur_node = start
@@ -343,8 +344,6 @@ class MetaPathGenerator:
                     for pair, count in cnt.items()]
         self.pairs = list(itertools.chain(*down_cnt))
         np.random.shuffle(self.pairs)
-
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 4 + 1:
