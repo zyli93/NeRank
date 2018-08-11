@@ -74,32 +74,52 @@ class RecSys(nn.Module):
 
         emb_rank_q = rank_q_output.gather(1, rank_q_len.detach())
 
-        low_rank_mat = torch.stack(
-            [emb_rank_r, emb_rank_q.squeeze(), emb_rank_a]
-            , dim=1) \
-            .unsqueeze(1)
-        high_rank_mat = torch.stack(
-            [emb_rank_r, emb_rank_q.squeeze(), emb_rank_acc]
-            , dim=1) \
-            .unsqueeze(1)
+        # ==== new code starts here ====
+        emb_rank_query = (emb_rank_r + emb_rank_q) / 2
+        print("Embedding Ranking Query shape ...")
+        print(emb_rank_query.shape)
+        print("Embedding Ranking Question shape ...")
+        print(emb_rank_q.shape)
+        low_score = torch.bmm(emb_rank_query.unsqueeze(1),
+                              emb_rank_a.unsqueeze(1).permute(1, 2)).squeeze()
 
-        low_score = torch.cat([
-            self.convnet1(low_rank_mat)
-            , self.convnet2(low_rank_mat)
-            , self.convnet3(low_rank_mat)]
-            , dim=2).squeeze()
-        high_score = torch.cat([
-            self.convnet1(high_rank_mat)
-            , self.convnet2(high_rank_mat)
-            , self.convnet3(high_rank_mat)]
-            , dim=2).squeeze()
+        high_score = torch.bmm(emb_rank_query.unsqueeze(1),
+                               emb_rank_acc.unsqueeze(1).permute(1, 2)).squeeze()
 
-        low_score = self.fc_new_2(
-            self.fc_new_1(low_score.squeeze()).squeeze()).squeeze()
-        high_score = self.fc_new_2(
-            self.fc_new_1(high_score.squeeze()).squeeze()).squeeze()
+        print("Embedding high_score shape")
+        print(high_score.shape)
+        print("Embedding low_score shape")
+        print(low_score.shape)
+
+        # ==== new code ends here ====
+
+        # low_rank_mat = torch.stack(
+        #     [emb_rank_r, emb_rank_q.squeeze(), emb_rank_a]
+        #     , dim=1) \
+        #     .unsqueeze(1)
+        # high_rank_mat = torch.stack(
+        #     [emb_rank_r, emb_rank_q.squeeze(), emb_rank_acc]
+        #     , dim=1) \
+        #     .unsqueeze(1)
+        #
+        # low_score = torch.cat([
+        #     self.convnet1(low_rank_mat)
+        #     , self.convnet2(low_rank_mat)
+        #     , self.convnet3(low_rank_mat)]
+        #     , dim=2).squeeze()
+        # high_score = torch.cat([
+        #     self.convnet1(high_rank_mat)
+        #     , self.convnet2(high_rank_mat)
+        #     , self.convnet3(high_rank_mat)]
+        #     , dim=2).squeeze()
+        #
+        # low_score = self.fc_new_2(
+        #     self.fc_new_1(low_score.squeeze()).squeeze()).squeeze()
+        # high_score = self.fc_new_2(
+        #     self.fc_new_1(high_score.squeeze()).squeeze()).squeeze()
 
         rank_loss = torch.sum(F.sigmoid(low_score - high_score))
+
         # rank_loss = F.sigmoid(rank_loss)
         print("Rank loss: {:.6f}".format(rank_loss.data[0]))
 
