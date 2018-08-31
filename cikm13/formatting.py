@@ -3,12 +3,19 @@ import numpy as np
 import pandas as pd
 import json
 
+import sys
+
+
+qid_lda = {}
+qid_lm_ans = {}
+qid_lm_ask_ans = {}
+qid_len = {}
+user_feature = {}
 
 def question_features(dataset):
     dir = os.getcwd() + "data/" + dataset + "/"
 
     # ============ LDA Feature ====================
-    qid_lda = {}
     with open(dir + "qid.prob.lda", "r") as fin:
         for line in fin.readlines():
             qid, feature = line.strip().split(" ")
@@ -16,7 +23,6 @@ def question_features(dataset):
         qid_lda[-1] = np.mean(list(qid_lda.values()))  # default value
 
     # ============ LM ANS Feature ====================
-    qid_lm_ans = {}
     with open(dir + "qid.prob.lm.ans", "r") as fin:
         for line in fin.readlines():
             qid, feature = line.strip().split(" ")
@@ -24,7 +30,6 @@ def question_features(dataset):
         qid_lm_ans[-1] = np.mean(list(qid_lm_ans.values()))  # default values
 
     # ============ LM ASK_ANS Feature ====================
-    qid_lm_ask_ans = {}
     with open(dir + "qid.prob.lm.ask_ans", "r") as fin:
         for line in fin.readlines():
             qid, feature = line.strip().split(" ")
@@ -32,7 +37,6 @@ def question_features(dataset):
         qid_lm_ask_ans[-1] = np.mean(list(qid_lm_ask_ans.values()))  # default values
 
     # ============ Question Length Feature ====================
-    qid_len = {}
     with open(dir + "question.title.length", "r") as fin:
         for line in fin.readlines():
             qid, length = line.strip().split(" ")
@@ -40,8 +44,7 @@ def question_features(dataset):
         qid_len[-1] = np.mean(list(qid_len.values()),
                               dtype=np.int32)  # default values
 
-    user_feature = {}
-    df = pd.read_csv("test", delim_whitespace=True, header=None)
+    df = pd.read_csv("user.specific", delim_whitespace=True, header=None)
     defaults = [df[x].mean() for x in range(1, 4)]
     with open(dir + "user.specific", "r") as fin:
         for line in fin.readlines():
@@ -86,8 +89,47 @@ def question_features(dataset):
             fout.write(out_line)
 
 
-def create_substring( user_features, uid):
+def create_substring(user_features, uid):
     features = user_features.get(uid, user_features[-1])
     features_str_list = ["{}:{}".format(i+5, features[i]) for i in range(len(features))]
     return " ".join(features_str_list)
 
+
+def create_test(dataset):
+    dir = os.getcwd() + "data/" + dataset + "/"
+
+    in_file = os.getcwd() + "/../data/{}/Record_Train.json".format(dataset)
+    output_buffer = []
+    with open(in_file, "r") as fin:
+        for query_index, line in enumerate(fin.readlines()):
+            line_split = line.strip().split(" ")
+            qid = int(line_split[1])
+            accaid = int(line_split[2])
+            uids = [int(x) for x in line_split[3:]]
+            uids.pop(uids.index(accaid))
+            q_feature = [
+                qid_lda.get(qid, qid_lda[-1]),
+                qid_lm_ans.get(qid, qid_lm_ans[-1]),
+                qid_lm_ask_ans.get(qid, qid_lm_ask_ans[-1]),
+                qid_len.get(qid, qid_len[-1])
+            ]
+            q_feature_string = " ".join(["{}:{}".format(index + 1, value)
+                                         for index, value in enumerate(q_feature)])
+
+            output_buffer.append("1 qid:{} ".format(query_index) + q_feature_string + " " +
+                                 create_substring(user_features=user_feature, uid=accaid))
+            for uid in uids:
+                output_buffer.append("1 qid:{} ".format(query_index) + q_feature_string + " " +
+                                     create_substring(user_features=user_feature, uid=uid))
+
+    with open(dir + "test.dat", "w") as fout:
+        for x in output_buffer:
+            fout.write(x)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 1 + 1:
+        print("Invalid input param.")
+    ds = sys.argv[1]
+    question_features(ds)
+    create_test(ds)
