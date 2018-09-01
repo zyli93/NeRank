@@ -13,31 +13,31 @@ qid_len = {}
 user_feature = {}
 
 def question_features(dataset):
-    dir = os.getcwd() + "data/" + dataset + "/"
+    DIR = os.getcwd() + "data/" + dataset + "/"
 
     # ============ LDA Feature ====================
-    with open(dir + "qid.prob.lda", "r") as fin:
+    with open(DIR + "qid.prob.lda", "r") as fin:
         for line in fin.readlines():
             qid, feature = line.strip().split(" ")
             qid_lda[int(qid)] = float(feature)
         qid_lda[-1] = np.mean(list(qid_lda.values()))  # default value
 
     # ============ LM ANS Feature ====================
-    with open(dir + "qid.prob.lm.ans", "r") as fin:
+    with open(DIR + "qid.prob.lm.ans", "r") as fin:
         for line in fin.readlines():
             qid, feature = line.strip().split(" ")
             qid_lm_ans[int(qid)] = float(feature)
         qid_lm_ans[-1] = np.mean(list(qid_lm_ans.values()))  # default values
 
     # ============ LM ASK_ANS Feature ====================
-    with open(dir + "qid.prob.lm.ask_ans", "r") as fin:
+    with open(DIR + "qid.prob.lm.ask_ans", "r") as fin:
         for line in fin.readlines():
             qid, feature = line.strip().split(" ")
             qid_lm_ask_ans[int(qid)] = float(feature)
         qid_lm_ask_ans[-1] = np.mean(list(qid_lm_ask_ans.values()))  # default values
 
     # ============ Question Length Feature ====================
-    with open(dir + "question.title.length", "r") as fin:
+    with open(DIR + "question.title.length", "r") as fin:
         for line in fin.readlines():
             qid, length = line.strip().split(" ")
             qid_len[int(qid)] = int(length)
@@ -46,7 +46,7 @@ def question_features(dataset):
 
     df = pd.read_csv("user.specific", delim_whitespace=True, header=None)
     defaults = [df[x].mean() for x in range(1, 4)]
-    with open(dir + "user.specific", "r") as fin:
+    with open(DIR + "user.specific", "r") as fin:
         for line in fin.readlines():
             elements = line.strip().split(" ")
             user_feature[int(elements[0])] = [float(x) for x in elements[1:]]
@@ -83,7 +83,7 @@ def question_features(dataset):
                     out_buffer.append(term_a)
             except KeyError:
                 pass
-    out_file = dir + "train.dat"
+    out_file = DIR + "train.dat"
     with open(out_file, "w") as fout:
         for out_line in out_buffer:
             fout.write(out_line)
@@ -96,7 +96,7 @@ def create_substring(user_features, uid):
 
 
 def create_test(dataset):
-    dir = os.getcwd() + "data/" + dataset + "/"
+    DIR = os.getcwd() + "data/" + dataset + "/"
 
     in_file = os.getcwd() + "/../data/{}/Record_Train.json".format(dataset)
     output_buffer = []
@@ -122,14 +122,39 @@ def create_test(dataset):
                 output_buffer.append("1 qid:{} ".format(query_index) + q_feature_string + " " +
                                      create_substring(user_features=user_feature, uid=uid))
 
-    with open(dir + "test.dat", "w") as fout:
+    with open(DIR + "test.dat", "w") as fout:
         for x in output_buffer:
             fout.write(x)
 
 
+def evaluate(dataset, count):
+    DIR = os.getcwd() + "data/" + dataset + "/"
+    in_file = "predictions"
+    MRR,  hit_K, prec_1 = 0, 0, 0
+    with open(DIR + in_file, "r") as fin:
+        lines = fin.readlines()
+        lines = [float(x.strip()) for x in lines]
+        queries = [lines[i: i+count] for i in range(0, len(lines), count)]
+        for qry in queries:
+            gt = qry[0]
+            qry.sort()
+            rank = qry.index(gt) + 1
+            MRR += 1/rank
+            hit_K += 1 if rank < 5 else 0
+            prec_1 += 1 if rank == 1 else 0
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 1 + 1:
-        print("Invalid input param.")
+    if len(sys.argv) < 2 + 1:
+        print("Invalid input")
+        print("\tparameter list: [dataset] [mode] [Count]")
     ds = sys.argv[1]
-    question_features(ds)
-    create_test(ds)
+    mode = int()
+
+    if mode == 1:
+        question_features(ds)
+        create_test(ds)
+    elif mode == 2:
+        evaluate(ds, count)
+
+
