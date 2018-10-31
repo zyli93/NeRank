@@ -87,7 +87,7 @@ class PDER:
         skipgram_optimizer = optim.Adam(skipgram.parameters()
                                         , lr=self.learning_rate)
         recsys_optimizer = optim.Adam(recsys.parameters()
-                                      , lr=0.07 * self.learning_rate)
+                                      , lr=0.5 * self.learning_rate)
 
         batch_count = 0
         best_MRR, best_hit_K, best_pa1 = 0, 0, 0
@@ -149,6 +149,7 @@ class PDER:
                     qinfo = [x.cuda() for x in qinfo]
                     rank = [x.cuda() for x in rank]
 
+                print("E:{:d}, I{:d}".format(epoch, iter), end=" ")
                 """
                 ============== Skip-gram ===============
                 """
@@ -184,19 +185,21 @@ class PDER:
                 n_sample = upos.shape[1]
 
                 # Print training progress every 10 iterations
-                if iter % 10 == 0:
-                    tr = datetime.datetime.now().isoformat()[8:24]
-                    print("E:{}, I:{}, size:{}, {}, Loss:{:.3f}"
-                          .format(epoch, iter, n_sample, tr, skipgram_loss.data[0]))
+                #if iter % 10 == 0:
+                #    tr = datetime.datetime.now().isoformat()[8:24]
+                #    print("E:{}, I:{}, size:{}, {}, Loss:{:.3f}"
+                #          .format(epoch, iter, n_sample, tr, skipgram_loss.data[0]))
 
                 # Write to file every 10 iterations
-                if batch_count % 10 == 0:
+                if batch_count % 200 == 0:
                     # hMRR, hhit_K, hpa1 = 0, 0, 0
                     hMRR, hhit_K, hpa1 = self.test()
                     print("\tEntire Val@ I:{}, MRR={:.4f}, hitK={:.4f}, pa1={:.4f}"
                           .format(iter, hMRR, hhit_K, hpa1))
-                    msg = "{:d},{:d},{:.6f},{:.6f},{:.6f}"\
-                          .format(epoch, iter, hMRR, hhit_K, hpa1)
+                    msg = "{:d}, {:d}, {:d}, {:.6f}, {:.6f}, {:.6f}, {:.6f},{:.6f}"\
+                          .format(batch_count, epoch, iter, 
+                                  hMRR, hhit_K, hpa1,
+                                  skipgram_loss.data[0], recsys_loss.data[0])
                     utils.write_performance(msg=msg)
 
                 # Write to disk every 1000 iterations

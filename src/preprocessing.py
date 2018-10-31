@@ -365,7 +365,8 @@ def extract_question_user(data_dir, parsed_dir):
         data_dir - data directory
         parsed_dir - parsed file directory
     """
-    INPUT = "Record_Train.json"
+    # INPUT = "Record_Train.json"
+    INPUT = "Record_All.json"
     OUTPUT = "Q_R.txt"
 
     if not os.path.exists(data_dir + INPUT):
@@ -520,7 +521,7 @@ def extract_question_best_answerer(data_dir, parsed_dir):
         parsed_dir  -  as usual
     """
     INPUT_A = "Posts_A.json"
-    INPUT_MAP = "QAU_Map.json"
+    INPUT_MAP = "Record_Train.json"
     OUTPUT = "Q_ACC_A.txt"
 
     if not os.path.exists(data_dir + INPUT_A):
@@ -528,8 +529,8 @@ def extract_question_best_answerer(data_dir, parsed_dir):
     if not os.path.exists(data_dir + INPUT_MAP):
         IOError("Cannot find file {}".format(data_dir + INPUT_MAP))
 
-    accaid_uaid = {}  # Accepted answer id to Answering user id
-    aid_score = {}  # Answer id to answer scores
+    accanswerid_uaid = {}  # Accepted answer id to Answering user id
+    answerid_score = {}  # Answer id to answer scores
     with open(data_dir + INPUT_A, "r") as fin_a, \
         open(data_dir + INPUT_MAP, "r") as fin_map, \
         open(parsed_dir + OUTPUT, "w") as fout:
@@ -538,36 +539,76 @@ def extract_question_best_answerer(data_dir, parsed_dir):
         for line in fin_a:
             data = json.loads(line)
             try:
-                aid = data.get("Id")
+                answerid = data.get("Id")
+                if answerid == "5":
+                    print(100)
                 score = data.get("Score")
                 uaid = data.get("OwnerUserId")
-                aid_score[aid] = score
-                accaid_uaid[aid] = uaid
+                answerid_score[answerid] = score
+                accanswerid_uaid[answerid] = uaid  # uaid is rid
             except:
                 logging.info(
                     "Error at Extracting question, best answer user: "
                     + str(data))
 
+        print(len(accanswerid_uaid))
         for line in fin_map:
             data = json.loads(line)
             try:
                 qid = data.get('QuestionId')
                 if "AcceptedAnswerID" in data:  # If acc answer exists
-                    acc_aid = data.get('AcceptedAnswerId')
+                    acc_answerid = data.get('AcceptedAnswerId')
                 else:
                 # If acc answer doesn't exist, choose highest score answer
-                    ans = data.get('AnswerOwnerList')
+                    ans = data.get('AnswerIdList')
                     ans = list(zip(*ans))[0]
-                    scores = [aid_score[aid] for aid in ans]
+                    scores = [answerid_score[answerid] for answerid in ans]
                     max_ind = scores.index(max(scores))
-                    acc_aid = ans[max_ind]
-                uaccid = accaid_uaid[acc_aid]
+                    acc_answerid = ans[max_ind]
+                uaccid = accanswerid_uaid[acc_aid]
                 print("{} {}".format(qid, uaccid), file=fout)
             except:
+                print(1)
                 logging.info(
                     "Error at Extracting question, best answer user: "
                      + str(data))
 
+
+def extract_question_best_answerer_2(data_dir, parsed_dir):
+    """Extract the question-best-answerer relation
+
+    Args:
+        data_dir  - as usual
+        parsed_dir  -  as usual
+    """
+    INPUT_A = "Posts_A.json"
+    # INPUT_MAP = "Record_Train.json"
+    # Uncomment this when running NeRank
+    INPUT_MAP = "Record_All.json"
+    OUTPUT = "Q_ACC_A.txt"
+
+    if not os.path.exists(data_dir + INPUT_A):
+        IOError("Cannot find file {}".format(data_dir + INPUT_A))
+    if not os.path.exists(data_dir + INPUT_MAP):
+        IOError("Cannot find file {}".format(data_dir + INPUT_MAP))
+
+    accanswerid_uaid = {}  # Accepted answer id to Answering user id
+    answerid_score = {}  # Answer id to answer scores
+    with open(data_dir + INPUT_MAP, "r") as fin_map, \
+        open(parsed_dir + OUTPUT, "w") as fout:
+
+        for line in fin_map:
+            data = json.loads(line)
+            try:
+                qid = data.get('QuestionId')
+                acc_aid = data.get("AcceptedAnswererId")
+                if qid and acc_aid:
+                    print("{} {}".format(qid, acc_aid), file=fout)
+            except:
+                print(1)
+                logging.info(
+                    "Error at Extracting question, best answer user: "
+                     + str(data))
 
 def write_part_users(parsed_dir):
     OUTPUT = "QA_ID.txt"
@@ -619,34 +660,34 @@ def preprocess_(dataset, threshold, prop_test, sample_size):
 
     # Split contest to question and answer
     print("\tSpliting post")
-    split_post(raw_dir=RAW_DIR, data_dir=DATA_DIR)
+    # split_post(raw_dir=RAW_DIR, data_dir=DATA_DIR)
 
     # Extract question-user, answer-user, and question-answer information
     # Generate Question and Answer/User map
     print("\tProcessing QA")
-    process_QA(data_dir=DATA_DIR)
+    # process_QA(data_dir=DATA_DIR)
 
     print("\tGenerating question statistics...")
-    question_stats(data_dir=DATA_DIR)
+    # question_stats(data_dir=DATA_DIR)
 
     print("\tExtracting question content ...")
-    extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+    # extract_question_content(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
     print("\tBuilding test sets")
-    build_test_set(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
-                   threshold=threshold, test_sample_size=sample_size,
-                   test_proportion=prop_test)
+    # build_test_set(data_dir=DATA_DIR, parsed_dir=PARSED_DIR,
+    #                threshold=threshold, test_sample_size=sample_size,
+    #                test_proportion=prop_test)
 
     print("\tExtracting Q, R, A relations ...")
     extract_question_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    extract_question_answer_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+    # extract_question_answer_user(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
 
     # extract_answer_score(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
-    # extract_question_best_answerer(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
+    # extract_question_best_answerer_2(data_dir=DATA_DIR, parsed_dir=PARSED_DIR)
 
-    write_part_users(parsed_dir=PARSED_DIR)
+    # write_part_users(parsed_dir=PARSED_DIR)
 
     print("Done!")
 

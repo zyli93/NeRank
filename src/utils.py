@@ -36,11 +36,11 @@ class Utils:
                 else:
                     return 1/(ind+1), int(ind < k), 0
 
-    def save_model(self, model, epoch, iter):
+    def save_model(self, model_name, model, epoch, iter):
         if not os.path.exists(self.model_folder):
             os.mkdir(self.model_folder)
         torch.save(model.state_dict(),
-                   "{}_{}_E{}I{}".format(self.model_folder, str(self.id), epoch, iter))
+                   "{}{}_{}_E{}I{}".format(self.model_folder, model_name, str(self.id), epoch, iter))
         return
 
     def write_performance(self, msg):

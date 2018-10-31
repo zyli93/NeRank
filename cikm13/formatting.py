@@ -13,7 +13,7 @@ qid_len = {}
 user_feature = {}
 
 def question_features(dataset):
-    DIR = os.getcwd() + "data/" + dataset + "/"
+    DIR = os.getcwd() + "/data/" + dataset + "/"
 
     # ============ LDA Feature ====================
     with open(DIR + "qid.prob.lda", "r") as fin:
@@ -44,7 +44,7 @@ def question_features(dataset):
         qid_len[-1] = np.mean(list(qid_len.values()),
                               dtype=np.int32)  # default values
 
-    df = pd.read_csv("user.specific", delim_whitespace=True, header=None)
+    df = pd.read_csv(DIR + "user.specific", delim_whitespace=True, header=None)
     defaults = [df[x].mean() for x in range(1, 4)]
     with open(DIR + "user.specific", "r") as fin:
         for line in fin.readlines():
@@ -79,6 +79,7 @@ def question_features(dataset):
                 # Create Answer terms
                 for uid in aid_list:
                     term_a = "1 qid:{} ".format(query_index) \
+                             + q_feature_string + " " \
                              + create_substring(user_features=user_feature, uid=uid)
                     out_buffer.append(term_a)
             except KeyError:
@@ -86,7 +87,7 @@ def question_features(dataset):
     out_file = DIR + "train.dat"
     with open(out_file, "w") as fout:
         for out_line in out_buffer:
-            fout.write(out_line)
+            fout.write(out_line + "\n")
 
 
 def create_substring(user_features, uid):
@@ -96,9 +97,9 @@ def create_substring(user_features, uid):
 
 
 def create_test(dataset):
-    DIR = os.getcwd() + "data/" + dataset + "/"
+    DIR = os.getcwd() + "/data/" + dataset + "/"
 
-    in_file = os.getcwd() + "/../data/{}/Record_Train.json".format(dataset)
+    in_file = os.getcwd() + "/../data/parsed/{}/test.txt".format(dataset)
     output_buffer = []
     with open(in_file, "r") as fin:
         for query_index, line in enumerate(fin.readlines()):
@@ -124,17 +125,17 @@ def create_test(dataset):
 
     with open(DIR + "test.dat", "w") as fout:
         for x in output_buffer:
-            fout.write(x)
+            fout.write(x + "\n")
 
 
 def evaluate(dataset, count):
-    DIR = os.getcwd() + "data/" + dataset + "/"
-    in_file = "predictions"
+    in_file = os.getcwd() + "/predictions/" + dataset[:3]
     MRR,  hit_K, prec_1 = 0, 0, 0
-    with open(DIR + in_file, "r") as fin:
+    with open( in_file, "r") as fin:
         lines = fin.readlines()
         lines = [float(x.strip()) for x in lines]
         queries = [lines[i: i+count] for i in range(0, len(lines), count)]
+        count = 0
         for qry in queries:
             gt = qry[0]
             qry.sort()
@@ -142,19 +143,28 @@ def evaluate(dataset, count):
             MRR += 1/rank
             hit_K += 1 if rank < 5 else 0
             prec_1 += 1 if rank == 1 else 0
+            count += 1
+        print("MRR: {:.6f}, HaK {:.6f}, Pa1: {:.6f}".format(
+            MRR / count , hit_K / count, prec_1 / count))
+
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 + 1:
         print("Invalid input")
         print("\tparameter list: [dataset] [mode] [Count]")
+        sys.exit(1)
     ds = sys.argv[1]
-    mode = int()
+    mode = int(sys.argv[2])
+    count = int(sys.argv[3])
 
     if mode == 1:
+        print("Doing mode 1-1")
         question_features(ds)
+        print("Doing mode 1-2")
         create_test(ds)
     elif mode == 2:
-        evaluate(ds, count)
+        print("Doing mode 2-1")
+        print(evaluate(ds, count))
 
 

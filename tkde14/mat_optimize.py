@@ -155,8 +155,10 @@ if __name__ == "__main__":
 
     RESULT_DIR = CUR_DIR + dataset
     if not os.path.exists(RESULT_DIR):
-        os.mkdir(CUR_DIR)
         os.mkdir(RESULT_DIR)
+
+    if not os.path.exists(CUR_DIR):
+        os.mkdir(CUR_DIR)
 
     print("Building Matrix L...")
     build_matrix_L(dataset)

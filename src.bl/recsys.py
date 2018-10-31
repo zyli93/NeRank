@@ -75,21 +75,12 @@ class RecSys(nn.Module):
         emb_rank_q = rank_q_output.gather(1, rank_q_len.detach())
 
         # ==== new code starts here ====
-        emb_rank_query = (emb_rank_r + emb_rank_q) / 2
-        print("Embedding Ranking Query shape ...")
-        print(emb_rank_query.shape)
-        print("Embedding Ranking Question shape ...")
-        print(emb_rank_q.shape)
+        emb_rank_query = (emb_rank_r + emb_rank_q.squeeze()) / 2
         low_score = torch.bmm(emb_rank_query.unsqueeze(1),
-                              emb_rank_a.unsqueeze(1).permute(1, 2)).squeeze()
+                              emb_rank_a.unsqueeze(1).permute(0, 2, 1)).squeeze()
 
         high_score = torch.bmm(emb_rank_query.unsqueeze(1),
-                               emb_rank_acc.unsqueeze(1).permute(1, 2)).squeeze()
-
-        print("Embedding high_score shape")
-        print(high_score.shape)
-        print("Embedding low_score shape")
-        print(low_score.shape)
+                               emb_rank_acc.unsqueeze(1).permute(0, 2, 1)).squeeze()
 
         # ==== new code ends here ====
 

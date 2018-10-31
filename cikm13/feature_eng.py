@@ -268,7 +268,8 @@ def get_prob_LDA(records):
                          (topic_word_probs[topic_id][word_id] if word_id in topic_word_probs[topic_id] else 0)
                         for topic_id in wtopic[word_id]]
             word_prob = sum(word_prob)
-            text_prob += count * math.log(word_prob)
+            # print(word_prob)
+            text_prob += count * math.log(word_prob + 0.0001)
         probs.append((qid_list[index], text_prob))
 
     return probs
@@ -283,8 +284,10 @@ if __name__ == "__main__":
 
     RESULT_DIR = CUR_DIR + dataset
     if not os.path.exists(RESULT_DIR):
-        os.mkdir(CUR_DIR)
         os.mkdir(RESULT_DIR)
+
+    if not os.path.exists(CUR_DIR):
+        os.mkdir(CUR_DIR)
 
     print("Running Feature Extraction of CIKM'13 baseline ...\n")
 
