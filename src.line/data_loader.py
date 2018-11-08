@@ -32,7 +32,7 @@ class DataLoader():
         self.answer_sample_ratio = answer_sample_ratio
 
         self.corpus_path =\
-            os.getcwd() + "/corpus/" + "{}_{}_{}.txt".format(
+            os.getcwd() + "/corpus_line/" + "{}_{}_{}.txt".format(
                 self.dataset, str(coverage), str(length))
 
         self.mpwalks_path =\

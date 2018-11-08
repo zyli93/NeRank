@@ -318,7 +318,7 @@ class MetaPathGenerator:
         Return:
         """
         print("Writing Generated Pairs to files ...")
-        DATA_DIR = os.getcwd() + "/corpus/"
+        DATA_DIR = os.getcwd() + "/corpus_line/"
         OUTPUT = DATA_DIR + self._dataset + "_" + \
                  str(self._coverage) + "_" + str(self._walk_length) + ".txt"
         if not os.path.exists(DATA_DIR):
@@ -345,6 +345,13 @@ class MetaPathGenerator:
         self.pairs = list(itertools.chain(*down_cnt))
         np.random.shuffle(self.pairs)
 
+    def sample_LINE(self):
+        pairs = self.pairs
+        for u, v in self.G.edges:
+            pairs.append((u, v))
+            pairs.append((v, u))
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 4 + 1:
         print("\t Usage:{} "
@@ -359,11 +366,17 @@ if __name__ == "__main__":
     gw = MetaPathGenerator(length=length, coverage=num_walk, dataset=dataset)
 
     # Uncomment the first line for metapath-based
+
     # gw.generate_metapaths(patterns=["AQRQA"], alpha=0)
-    gw.generate_metapaths_2()
-    gw.path_to_pairs(window_size=window_size)
-    gw.down_sample()
-    gw.write_metapaths()
+    # gw.generate_metapaths_2()
+
+    # gw.path_to_pairs(window_size=window_size)
+    # gw.down_sample()
+
+    # gw.write_metapaths()
+
+    gw.sample_LINE()
+
     gw.write_pairs()
 
 
